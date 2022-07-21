@@ -3,6 +3,14 @@ export const CommentTypes = {
   MULTI_LINE: 2,
 };
 
+export const QuoteTypes = {
+  SINGLE: `'`,
+  DOUBLE: `"`,
+  BACK: '`',
+};
+
+export const isQuote = (char) => char === QuoteTypes.SINGLE || char === QuoteTypes.DOUBLE || char === QuoteTypes.BACK;
+
 export const isNewLine = (char) => /[\n\r]/.test(char);
 
 export const debounce = (fn, wait = 300) => {
