@@ -2,13 +2,16 @@
   <img src="https://cdn.jsdelivr.net/gh/b2ns/vueact/assets/logo.png">
 </p>
 
-# vueact
+# vueact 😂
+
+[![](https://shields.io/badge/vue-35495E?logo=vuedotjs&style=flat)](https://github.com/vuejs/core)
+[![](https://shields.io/badge/react-black?logo=react&style=flat)](https://github.com/facebook/react/)
 
 a toy mixing Vue and React features
 
 just for fun 🕹️
 
-## features
+## features ✨
 
 - Vue
   - reactivity
@@ -25,7 +28,7 @@ just for fun 🕹️
   - homemade JSX compiler
   - homemade assets bundler
 
-## todo
+## todo 🔨
 
 - [ ] watchPostEffect
 - [ ] provide, inject
