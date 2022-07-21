@@ -4,8 +4,8 @@
 
 # vueact 😂
 
-[![](https://shields.io/badge/vue-35495E?logo=vuedotjs&style=flat)](https://github.com/vuejs/core)
-[![](https://shields.io/badge/react-black?logo=react&style=flat)](https://github.com/facebook/react/)
+[![vue](https://shields.io/badge/vue-35495E?logo=vuedotjs&style=flat)](https://github.com/vuejs/core)
+[![react](https://shields.io/badge/react-black?logo=react&style=flat)](https://github.com/facebook/react/)
 
 a toy mixing Vue and React features
 
@@ -25,7 +25,7 @@ just for fun 🕹️
   - props.children (as slots in Vue)
   - render props
 - no other dependencis
-  - homemade JSX compiler
+  - homemade JSX compiler (to extend the React JSX syntax)
   - homemade assets bundler
 
 ## todo 🔨
