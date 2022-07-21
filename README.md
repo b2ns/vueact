@@ -18,6 +18,7 @@ just for fun 🕹️
   - custom renderer
 - React
   - JSX
+  - stateful functional component
   - props.children (as slots in Vue)
   - render props
 - no other dependencis
