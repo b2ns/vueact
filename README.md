@@ -1,4 +1,6 @@
-![](https://cdn.jsdelivr.net/gh/b2ns/vueact/assets/logo.png)
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/b2ns/vueact/assets/logo.png">
+</p>
 
 # vueact
 
@@ -10,9 +12,13 @@ just for fun 🕹️
 
 - Vue
   - reactivity
+  - composition api
+  - lifecycle hooks
   - class and style normalize
+  - custom renderer
 - React
   - JSX
+  - props.children (as slots in Vue)
   - render props
 - no other dependencis
   - homemade JSX compiler
@@ -23,8 +29,11 @@ just for fun 🕹️
 - [ ] watchPostEffect
 - [ ] provide, inject
 - [ ] Fragment
-- [ ] v-show, v-model, v-html
+- [ ] custom directives
+- [ ] v-show, v-model
 - [ ] element ref
 - [ ] quick diff algorithem when child with keys
 - [ ] KeepAlive
 - [ ] Teleport (or Portal)
+- [ ] defineProps
+- [ ] inject `h` automatically
