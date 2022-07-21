@@ -1,4 +1,4 @@
-import { isComment, skipCommentCode } from './utils.js';
+import { handleQuotedCode, isComment, isQuote, skipCommentCode } from './utils.js';
 
 const Text = Symbol('text');
 const Dynamic = Symbol('dynamic');
@@ -145,7 +145,18 @@ export function compileJSX(sourceCode, index) {
     }
 
     if (dynamicFlag) {
-      if (char === '}') {
+      if (isComment(char, nextChar)) {
+        const [_, nextIndex] = skipCommentCode(sourceCode, i);
+        i = nextIndex - 1;
+      } else if (isQuote(char)) {
+        const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
+        dynamicVal += quotedCode;
+        i = nextIndex - 1;
+      } else if (isJSX(char, nextChar)) {
+        const [jsxCode, nextIndex] = compileJSX(sourceCode, i);
+        dynamicVal += jsxCode;
+        i = nextIndex - 1;
+      } else if (char === '}') {
         if (dynamicCurlyStack.length === 0) {
           if (propName) {
             const currentTag = getCurrentTag();
@@ -171,13 +182,6 @@ export function compileJSX(sourceCode, index) {
           dynamicVal += char;
           dynamicCurlyStack.pop();
         }
-      } else if (isJSX(char, nextChar)) {
-        const [code_, i_] = compileJSX(sourceCode, i);
-        dynamicVal += code_;
-        i = i_ - 1;
-      } else if (isComment(char, nextChar)) {
-        const [_, nextIndex] = skipCommentCode(sourceCode, i);
-        i = nextIndex - 1;
       } else {
         dynamicVal += char;
         if (char === '{') {

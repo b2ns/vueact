@@ -40,6 +40,26 @@ export function skipCommentCode(sourceCode, index) {
   return [code, i];
 }
 
+export function handleQuotedCode(sourceCode, index) {
+  let code = sourceCode[index];
+  const quoteType = sourceCode[index];
+
+  let i = index + 1;
+  while (i < sourceCode.length) {
+    const prevChar = sourceCode[i - 1];
+    const char = sourceCode[i];
+
+    code += char;
+    i++;
+
+    if (prevChar !== '\\' && char === quoteType) {
+      break;
+    }
+  }
+
+  return [code, i];
+}
+
 export const isComment = (char, nextChar) => char === '/' && (nextChar === CommentTypes.ONE_LINE || nextChar === CommentTypes.MULTI_LINE);
 
 export const isQuote = (char) => char === QuoteTypes.SINGLE || char === QuoteTypes.DOUBLE || char === QuoteTypes.BACK;

@@ -3,21 +3,17 @@ import { basename, join } from 'path';
 import { bundleStyle } from './bundleStyle.js';
 import { compileJSX, isJSX } from './compileJSX.js';
 import { transformImport } from './transformImport.js';
-import { isComment, isImport, isQuote, skipCommentCode } from './utils.js';
+import { handleQuotedCode, isComment, isImport, isQuote, skipCommentCode } from './utils.js';
 
 export function compile(sourceFile, output) {
   let sourceCode = readFileSync(sourceFile, { encoding: 'utf-8' });
 
   const styleFilenames = [];
 
-  let quoteFlag = false;
-  let quoteType = '';
-
   let code = '';
 
   let i = 0;
   while (i < sourceCode.length) {
-    const prevChar = sourceCode[i - 1];
     const char = sourceCode[i];
     const nextChar = sourceCode[i + 1];
 
@@ -27,23 +23,10 @@ export function compile(sourceFile, output) {
       continue;
     }
 
-    if (quoteFlag) {
-      if (prevChar !== '\\' && char === quoteType) {
-        quoteFlag = false;
-        quoteType = '';
-      }
-
-      code += char;
-      i++;
-      continue;
-    }
-
     if (isQuote(char)) {
-      quoteFlag = true;
-      quoteType = char;
-
-      code += char;
-      i++;
+      const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
+      code += quotedCode;
+      i = nextIndex;
       continue;
     }
 

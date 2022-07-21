@@ -1,13 +1,13 @@
 import { extname } from 'path';
-import { isComment, isNewLine, skipCommentCode } from './utils.js';
+import { handleQuotedCode, isComment, isNewLine, isQuote, skipCommentCode } from './utils.js';
 
 export function transformImport(sourceCode, index) {
   let code = '';
 
-  let quote = '';
   let filename = '';
+
   let i = index;
-  for (; i < sourceCode.length; i++) {
+  while (i < sourceCode.length) {
     const char = sourceCode[i];
     const nextChar = sourceCode[i + 1];
 
@@ -17,21 +17,15 @@ export function transformImport(sourceCode, index) {
       continue;
     }
 
-    if (quote) {
-      if (char === quote) {
-        i++;
-        break;
-      }
-      filename += char;
-      continue;
-    }
-
-    if (char === "'" || char === '"') {
-      quote = char;
-      continue;
+    if (isQuote(char)) {
+      const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
+      filename = quotedCode.slice(1, -1);
+      i = nextIndex;
+      break;
     }
 
     code += char;
+    i++;
   }
 
   const ext = extname(filename);
