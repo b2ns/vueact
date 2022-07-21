@@ -1,5 +1,3 @@
-<img src="https://cdn.jsdelivr.net/gh/b2ns/vueact/assets/logo.png" alt="logo" style="width: 100%; height: 250px;">
-
 ![](https://cdn.jsdelivr.net/gh/b2ns/vueact/assets/logo.png)
 
 # vueact
