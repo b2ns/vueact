@@ -1,4 +1,4 @@
-import { CommentTypes, isNewLine } from './utils.js';
+import { isComment, skipCommentCode } from './utils.js';
 
 const Text = Symbol('text');
 const Dynamic = Symbol('dynamic');
@@ -21,9 +21,6 @@ export function compileJSX(sourceCode, index) {
   let dynamicFlag = false;
   let dynamicVal = '';
   let dynamicCurlyStack = [];
-
-  let commentFlag = false;
-  let commentType = CommentTypes.ONE_LINE;
 
   let textFlag = false;
   let textVal = '';
@@ -147,21 +144,6 @@ export function compileJSX(sourceCode, index) {
       continue;
     }
 
-    if (commentFlag) {
-      if (commentType === CommentTypes.MULTI_LINE) {
-        if (char === '*' && nextChar === '/') {
-          commentFlag = false;
-          i++;
-        }
-      } else {
-        if (isNewLine(char)) {
-          commentFlag = false;
-          i++;
-        }
-      }
-      continue;
-    }
-
     if (dynamicFlag) {
       if (char === '}') {
         if (dynamicCurlyStack.length === 0) {
@@ -193,10 +175,9 @@ export function compileJSX(sourceCode, index) {
         const [code_, i_] = compileJSX(sourceCode, i);
         dynamicVal += code_;
         i = i_ - 1;
-      } else if (char === '/' && (nextChar === '*' || nextChar === '/')) {
-        commentFlag = true;
-        commentType = nextChar === '*' ? CommentTypes.MULTI_LINE : CommentTypes.ONE_LINE;
-        i++;
+      } else if (isComment(char, nextChar)) {
+        const [_, nextIndex] = skipCommentCode(sourceCode, i);
+        i = nextIndex - 1;
       } else {
         dynamicVal += char;
         if (char === '{') {

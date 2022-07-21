@@ -1,5 +1,5 @@
 import { extname } from 'path';
-import { isNewLine } from './utils.js';
+import { isComment, isNewLine, skipCommentCode } from './utils.js';
 
 export function transformImport(sourceCode, index) {
   let code = '';
@@ -9,6 +9,13 @@ export function transformImport(sourceCode, index) {
   let i = index;
   for (; i < sourceCode.length; i++) {
     const char = sourceCode[i];
+    const nextChar = sourceCode[i + 1];
+
+    if (isComment(char, nextChar)) {
+      const [_, nextIndex] = skipCommentCode(sourceCode, i);
+      i = nextIndex;
+      continue;
+    }
 
     if (quote) {
       if (char === quote) {

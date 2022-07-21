@@ -3,15 +3,12 @@ import { basename, join } from 'path';
 import { bundleStyle } from './bundleStyle.js';
 import { compileJSX, isJSX } from './compileJSX.js';
 import { transformImport } from './transformImport.js';
-import { CommentTypes, isImport, isNewLine, isQuote } from './utils.js';
+import { isComment, isImport, isQuote, skipCommentCode } from './utils.js';
 
 export function compile(sourceFile, output) {
   let sourceCode = readFileSync(sourceFile, { encoding: 'utf-8' });
 
   const styleFilenames = [];
-
-  let commentFlag = false;
-  let commentType = '';
 
   let quoteFlag = false;
   let quoteType = '';
@@ -24,18 +21,9 @@ export function compile(sourceFile, output) {
     const char = sourceCode[i];
     const nextChar = sourceCode[i + 1];
 
-    if (commentFlag) {
-      if (commentType === CommentTypes.MULTI_LINE) {
-        if (char === '*' && nextChar === '/') {
-          commentFlag = false;
-        }
-      } else {
-        if (isNewLine(char)) {
-          commentFlag = false;
-        }
-      }
-      code += char;
-      i++;
+    if (isComment(char, nextChar)) {
+      const [_, nextIndex] = skipCommentCode(sourceCode, i);
+      i = nextIndex;
       continue;
     }
 
@@ -78,10 +66,6 @@ export function compile(sourceFile, output) {
       continue;
     }
 
-    if (char === '/' && (nextChar === '*' || nextChar === '/')) {
-      commentFlag = true;
-      commentType = nextChar === '*' ? CommentTypes.MULTI_LINE : CommentTypes.ONE_LINE;
-    }
     code += char;
     i++;
   }

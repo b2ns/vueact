@@ -1,6 +1,6 @@
 export const CommentTypes = {
-  ONE_LINE: 1,
-  MULTI_LINE: 2,
+  ONE_LINE: '/',
+  MULTI_LINE: '*',
 };
 
 export const QuoteTypes = {
@@ -8,6 +8,39 @@ export const QuoteTypes = {
   DOUBLE: `"`,
   BACK: '`',
 };
+
+export function skipCommentCode(sourceCode, index) {
+  let code = '';
+  const commentType = sourceCode[index + 1] === CommentTypes.MULTI_LINE ? CommentTypes.MULTI_LINE : CommentTypes.ONE_LINE;
+
+  let i = index;
+  while (i < sourceCode.length) {
+    const char = sourceCode[i];
+    const nextChar = sourceCode[i + 1];
+
+    if (commentType === CommentTypes.MULTI_LINE) {
+      if (char === CommentTypes.MULTI_LINE && nextChar === '/') {
+        code += char;
+        code += nextChar;
+        i += 2;
+        break;
+      }
+    } else {
+      if (isNewLine(char)) {
+        code += char;
+        i++;
+        break;
+      }
+    }
+
+    code += char;
+    i++;
+  }
+
+  return [code, i];
+}
+
+export const isComment = (char, nextChar) => char === '/' && (nextChar === CommentTypes.ONE_LINE || nextChar === CommentTypes.MULTI_LINE);
 
 export const isQuote = (char) => char === QuoteTypes.SINGLE || char === QuoteTypes.DOUBLE || char === QuoteTypes.BACK;
 
