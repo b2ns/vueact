@@ -4,7 +4,7 @@
 
 # vueact
 
-a prototype mixing Vue and React features
+a toy mixing Vue and React features
 
 just for fun 🕹️
 

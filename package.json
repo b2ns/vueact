@@ -2,7 +2,7 @@
   "private": true,
   "name": "vueact",
   "version": "1.0.0",
-  "description": "a prototype mixing Vue and React features",
+  "description": "a toy mixing Vue and React features",
   "main": "index.js",
   "scripts": {
     "dev": "node build/build.js demo --output=dist --watch",
