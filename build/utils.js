@@ -123,5 +123,3 @@ export function escape(str, chars) {
   }
   return res;
 }
-
-console.log(escape('ab"c`d"', ['"', '`']));
