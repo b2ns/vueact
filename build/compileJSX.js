@@ -1,4 +1,4 @@
-import { handleQuotedCode, isComment, isQuote, skipCommentCode } from './utils.js';
+import { escape, handleQuotedCode, isComment, isQuote, skipCommentCode } from './utils.js';
 
 const Text = Symbol('text');
 const Dynamic = Symbol('dynamic');
@@ -270,7 +270,7 @@ function genCode(nodes) {
     let { type, props, children, value } = node;
     if (type === Text) {
       if (value) {
-        code += `,"${value}"`;
+        code += `,"${escape(value, '"')}"`;
       }
     } else if (type === Dynamic) {
       if (value && value.trim()) {

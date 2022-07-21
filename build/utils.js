@@ -102,3 +102,26 @@ export function isImport(code, index) {
     code[index + 5] === 't'
   );
 }
+
+export function escape(str, chars) {
+  if (!chars) {
+    return str;
+  }
+
+  if (!Array.isArray(chars)) {
+    chars = [chars];
+  } else if (!chars.length) {
+    return str;
+  }
+
+  let res = '';
+  for (const ch of str) {
+    if (chars.includes(ch)) {
+      res += '\\';
+    }
+    res += ch;
+  }
+  return res;
+}
+
+console.log(escape('ab"c`d"', ['"', '`']));
