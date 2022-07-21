@@ -1,7 +1,7 @@
-import { compile } from './compiler.js';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, watch } from 'fs';
 import { basename, dirname, extname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { compile } from './compiler.js';
 import { debounce, parseArgs } from './utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -13,11 +13,9 @@ const output = args.output ? r(args.output) : '';
 const isWatch = args.watch;
 
 function build(src, output) {
-  if (!src) return;
+  if (!src || !output) return;
 
-  if (output) {
-    recursiveCopy(src, output);
-  }
+  recursiveCopy(src, output);
 
   doCompile(src, output);
   console.log('build done!');
