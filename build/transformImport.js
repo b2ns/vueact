@@ -1,5 +1,5 @@
 import { extname } from 'path';
-import { handleQuotedCode, isComment, isNewLine, isQuote, skipCommentCode } from './utils.js';
+import { handleQuotedCode, isComment, isNewLine, isQuote, handleCommentCode } from './utils.js';
 
 export function transformImport(sourceCode, index) {
   let code = '';
@@ -12,7 +12,7 @@ export function transformImport(sourceCode, index) {
     const nextChar = sourceCode[i + 1];
 
     if (isComment(char, nextChar)) {
-      const [_, nextIndex] = skipCommentCode(sourceCode, i);
+      const [_, nextIndex] = handleCommentCode(sourceCode, i);
       i = nextIndex;
       continue;
     }

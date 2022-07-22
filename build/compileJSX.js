@@ -1,4 +1,4 @@
-import { escape, handleQuotedCode, isComment, isQuote, skipCommentCode } from './utils.js';
+import { escape, handleQuotedCode, isComment, isQuote, handleCommentCode } from './utils.js';
 
 const Text = Symbol('text');
 const Dynamic = Symbol('dynamic');
@@ -146,7 +146,7 @@ export function compileJSX(sourceCode, index) {
 
     if (dynamicFlag) {
       if (isComment(char, nextChar)) {
-        const [_, nextIndex] = skipCommentCode(sourceCode, i);
+        const [_, nextIndex] = handleCommentCode(sourceCode, i);
         i = nextIndex - 1;
       } else if (isQuote(char)) {
         const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);

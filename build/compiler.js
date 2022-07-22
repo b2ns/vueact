@@ -3,7 +3,7 @@ import { basename, join } from 'path';
 import { bundleStyle } from './bundleStyle.js';
 import { compileJSX, isJSX } from './compileJSX.js';
 import { transformImport } from './transformImport.js';
-import { handleQuotedCode, isComment, isImport, isQuote, skipCommentCode } from './utils.js';
+import { handleQuotedCode, isComment, isImport, isQuote, handleCommentCode } from './utils.js';
 
 export function compile(sourceFile, output) {
   let sourceCode = readFileSync(sourceFile, { encoding: 'utf-8' });
@@ -18,7 +18,7 @@ export function compile(sourceFile, output) {
     const nextChar = sourceCode[i + 1];
 
     if (isComment(char, nextChar)) {
-      const [_, nextIndex] = skipCommentCode(sourceCode, i);
+      const [_, nextIndex] = handleCommentCode(sourceCode, i);
       i = nextIndex;
       continue;
     }

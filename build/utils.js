@@ -9,7 +9,7 @@ export const QuoteTypes = {
   BACK: '`',
 };
 
-export function skipCommentCode(sourceCode, index) {
+export function handleCommentCode(sourceCode, index) {
   let code = '';
   const commentType = sourceCode[index + 1] === CommentTypes.MULTI_LINE ? CommentTypes.MULTI_LINE : CommentTypes.ONE_LINE;
 
