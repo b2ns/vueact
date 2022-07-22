@@ -1,5 +1,6 @@
 import Main from './views/Main';
 import About from './views/About';
+import './App.css';
 
 export default function App(props) {
   const footer = `<i>&copy; Copyright All Rights Reserved. ${new Date().getFullYear()}</i>`;
