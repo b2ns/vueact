@@ -85,12 +85,6 @@ export function escape(str, chars) {
     return str;
   }
 
-  if (!Array.isArray(chars)) {
-    chars = [chars];
-  } else if (!chars.length) {
-    return str;
-  }
-
   let res = '';
   for (const ch of str) {
     if (chars.includes(ch)) {
