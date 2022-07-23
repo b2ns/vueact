@@ -5,8 +5,8 @@
   "description": "a toy mixing Vue and React features",
   "main": "index.js",
   "scripts": {
-    "dev": "node build/build.js demo --output=dist --watch",
-    "build": "node build/build.js demo --output=dist",
+    "dev": "node build/index.js --watch",
+    "build": "node build/index.js",
     "clear": "rm -rf dist"
   },
   "type": "module",
