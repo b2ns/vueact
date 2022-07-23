@@ -1,9 +1,44 @@
-import { escape, handleQuotedCode, isComment, isQuote, handleCommentCode } from './utils.js';
+import { escape, handleCommentCode, handleQuotedCode, isComment, isQuote } from './utils.js';
 
 const Text = Symbol('text');
 const Dynamic = Symbol('dynamic');
 const SpreadProps = Symbol('spread props');
 const MSG = 'Compile Error:';
+
+export function compile(sourceCode) {
+  let code = '';
+  let i = 0;
+  while (i < sourceCode.length) {
+    const char = sourceCode[i];
+    const nextChar = sourceCode[i + 1];
+
+    if (isComment(char, nextChar)) {
+      const [commentCode, nextIndex] = handleCommentCode(sourceCode, i);
+      code += commentCode;
+      i = nextIndex;
+      continue;
+    }
+
+    if (isQuote(char)) {
+      const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
+      code += quotedCode;
+      i = nextIndex;
+      continue;
+    }
+
+    if (isJSX(char, nextChar)) {
+      const [jsxCode, nextIndex] = compileJSX(sourceCode, i);
+      code += jsxCode;
+      i = nextIndex;
+      continue;
+    }
+
+    code += char;
+    i++;
+  }
+
+  return code;
+}
 
 export function compileJSX(sourceCode, index) {
   let tagNameFlag = false;
@@ -20,7 +55,7 @@ export function compileJSX(sourceCode, index) {
 
   let dynamicFlag = false;
   let dynamicVal = '';
-  let dynamicCurlyStack = [];
+  const dynamicCurlyStack = [];
 
   let textFlag = false;
   let textVal = '';
