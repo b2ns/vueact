@@ -1,128 +1,251 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, extname, isAbsolute, join, relative, resolve } from 'path';
-import { fileURLToPath } from 'url';
-import { inNodeModules, isRelative, normalizePathname, resolveImportModules } from './utils.js';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, extname, join, relative, resolve } from 'path';
+import {
+  debounce,
+  genCodeFromAST,
+  isNpmModule,
+  isRelative,
+  log,
+  normalizePathname,
+  recursiveWatch,
+  removeItem,
+  resolveModuleImport,
+  shouldResolveModule,
+} from './utils.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const r = (p) => resolve(__dirname, '..', p);
+export default function pack(config = {}) {
+  let { root = './', entry = './src/main.js', output = './dist', resolve: resolveOpts, loaders, watch } = config;
 
-export default function pack({entry, output, resolve: resolveOpts, loaders }) {
+  const projectRoot = resolve(root);
+  const r = (p) => resolve(projectRoot, p);
+
+  entry = r(entry);
+  output = r(output);
+
   const importedModules = new Map();
 
-  function resolveDependencis() {
-    function doResolve(absPath, rawPath) {
-      const id = normalizePathname(absPath, resolveOpts && resolveOpts.extensions);
+  resolveDependencis(entry, importedModules, resolveOpts);
 
-      const cached = importedModules.get(id);
-      if (cached) {
-        return cached;
-      }
+  applyLoader([...importedModules.values()], loaders);
 
-      const module = {
-        id,
-        rawPath,
-        extensionChanged: false,
-        currentPath: id,
-        content: '',
-        dependencis: [],
-      };
-      importedModules.set(id, module);
+  writeContent([...importedModules.values()], output, projectRoot);
 
-      const sourceCode = readFileSync(id, { encoding: 'utf-8' });
-      const modules = resolveImportModules(sourceCode, resolveOpts);
-      if (modules.length) {
-        const rootDir = dirname(id);
-        for (const rawPath of modules) {
-          let absPath = rawPath;
-          if (isRelative(absPath)) {
-            absPath = join(rootDir, absPath);
-          } else if (inNodeModules(absPath)) {
-            // TODO: import from node_modules
-          }
+  log('build done');
 
-          module.dependencis.push(doResolve(absPath, rawPath));
-        }
-      }
+  /*
+   * watch
+   */
+  if (watch) {
+    log('watching ...');
 
-      return module;
+    for (const module of importedModules.values()) {
+      // free some memory
+      resetModule(module);
     }
 
-    return doResolve(r(entry), entry);
+    const handler = debounce((event, filename) => {
+      if (event !== 'change') {
+        return;
+      }
+
+      let module = importedModules.get(filename);
+
+      if (!module) return;
+
+      log(`changing: ${filename}`);
+
+      removeModule(module, importedModules);
+
+      module = resolveDependencis(module.id, importedModules, resolveOpts);
+
+      applyLoader(module, loaders);
+
+      writeContent(module, output, projectRoot);
+    });
+
+    recursiveWatch(dirname(entry), handler);
   }
+}
 
-  function applyLoader() {
-    function doApply(modules) {
-      const extensionChangedModules = new Set();
+/*
+ * resolve dependence graph
+ */
+function resolveDependencis(entry, cachedMap, resolveOpts) {
+  const dependencis = doResolve(entry, null);
 
-      for (const module of modules) {
-        if (!module.content) {
-          module.content = readFileSync(module.id, { encoding: 'utf-8' });
-        }
+  function doResolve(absPath, parentModule) {
+    const id = normalizePathname(absPath, resolveOpts && resolveOpts.extensions);
 
-        if (!loaders || !loaders.length) {
+    const cached = cachedMap.get(id);
+    if (cached) {
+      cached.parents.push(parentModule);
+      return cached;
+    }
+
+    const module = createModule(id);
+    module.parents.push(parentModule);
+    cachedMap.set(id, module);
+
+    if (shouldResolveModule(module.id)) {
+      const rootDir = dirname(id);
+      const sourceCode = readFileSync(id, { encoding: 'utf-8' });
+      const ast = resolveModuleImport(sourceCode, resolveOpts);
+      module.ast = ast;
+
+      for (const node of ast) {
+        if (node.type !== 'import') {
           continue;
         }
 
-        for (const loader of loaders) {
-          if (loader.test.test(module.currentPath) && loader.use && loader.use.length) {
-            const use = [...loader.use].reverse();
-            for (let fn of use) {
-              const opts = null;
-              if (Array.isArray(fn)) {
-                fn = fn[0];
-                opts = fn[1];
-              }
-              module.content = fn(module.content, opts, {
-                changeExtension: (ext) => changeExtension(module, ext),
-              });
-            }
-            if (module.extensionChanged) {
-              extensionChangedModules.add(module);
-              module.extensionChanged = false;
-            }
+        node.absPath = node.pathname;
+
+        if (isRelative(node.absPath)) {
+          node.absPath = join(rootDir, node.absPath);
+        } else if (isNpmModule(node.absPath)) {
+          // TODO: import from node_modules
+        }
+
+        module.dependencis.push(doResolve(node.absPath, module));
+      }
+    }
+
+    return module;
+  }
+
+  return dependencis;
+}
+
+function createModule(id) {
+  const module = {
+    id,
+    extensionChanged: false,
+    currentPath: id,
+    ast: null,
+    noWrite: false,
+    parents: [],
+    dependencis: [],
+  };
+  return module;
+}
+
+function resetModule(module) {
+  Object.assign(module, createModule(module.id));
+}
+
+function removeModule(module, cachedMap) {
+  cachedMap.delete(module.id);
+  for (const dep of module.dependencis) {
+    removeItem(dep.parents, module);
+  }
+  for (const parent of module.parents) {
+    removeItem(parent.dependencis, module);
+  }
+}
+
+/*
+ * apply loader on each imported module
+ */
+function applyLoader(modules, loaders) {
+  if (!loaders || !loaders.length) {
+    return;
+  }
+
+  doApply(Array.isArray(modules) ? modules : [modules]);
+
+  function doApply(modules) {
+    const extensionChangedModules = new Set();
+
+    for (const module of modules) {
+      for (const loader of loaders) {
+        if (
+          !loader.test ||
+          !loader.test.test(module.currentPath) ||
+          !loader.use ||
+          !loader.use.length ||
+          (loader.exclude && loader.exclude.some((pattern) => pattern.test(module.currentPath)))
+        ) {
+          continue;
+        }
+
+        const use = [...loader.use].reverse();
+        for (let fn of use) {
+          let opts = null;
+          if (Array.isArray(fn)) {
+            fn = fn[0];
+            opts = fn[1];
           }
+          fn(
+            {
+              absPath: module.id,
+              ast: module.ast,
+              parents: module.parents,
+              changeExtension: (ext) => changeExtension(module, ext),
+              noWrite: () => noWrite(module),
+            },
+            opts
+          );
+        }
+        if (module.extensionChanged) {
+          extensionChangedModules.add(module);
+          module.extensionChanged = false;
         }
       }
-
-      if (extensionChangedModules.size) {
-        doApply(extensionChangedModules.values());
-      }
     }
 
-    doApply(importedModules.values());
-  }
-
-  function changeExtension(module, ext) {
-    if (!ext) {
-      return;
-    }
-    if (!ext.startsWith('.')) {
-      ext = `.${ext}`;
-    }
-    module.extensionChanged = true;
-    module.currentPath = module.currentPath.replace(extname(module.currentPath), ext);
-  }
-
-  function writeToOutput() {
-    const root = r('.');
-    const dist = r(output);
-    if (!existsSync(dist)) {
-      mkdirSync(dist);
-    }
-
-    for (const module of importedModules.values()) {
-      const pathname = join(dist, relative(root, module.currentPath));
-      const dir = dirname(pathname);
-      if (!existsSync(dir)) {
-        mkdirSync(dir);
-      }
-      writeFileSync(pathname, module.content, { encoding: 'utf-8' });
+    if (extensionChangedModules.size) {
+      doApply([...extensionChangedModules.values()]);
     }
   }
+}
 
-  resolveDependencis();
+function changeExtension(module, ext) {
+  if (!ext) {
+    return;
+  }
+  if (!ext.startsWith('.')) {
+    ext = `.${ext}`;
+  }
+  const currentExt = extname(module.currentPath);
+  if (currentExt === ext) {
+    return;
+  }
 
-  applyLoader();
+  module.extensionChanged = true;
+  module.currentPath = module.currentPath.replace(currentExt, ext);
+}
 
-  writeToOutput();
+function noWrite(module) {
+  module.noWrite = true;
+}
+
+/*
+ * write to the disk
+ */
+function writeContent(modules, output, projectRoot) {
+  if (!Array.isArray(modules)) {
+    modules = [modules];
+  }
+
+  if (!existsSync(output)) {
+    mkdirSync(output);
+  }
+
+  for (const module of modules) {
+    if (module.noWrite) {
+      continue;
+    }
+
+    const dest = join(output, relative(projectRoot, module.currentPath));
+    const dir = dirname(dest);
+    if (!existsSync(dir)) {
+      mkdirSync(dir);
+    }
+
+    if (module.ast) {
+      const code = genCodeFromAST(module.ast);
+      writeFileSync(dest, code, { encoding: 'utf-8' });
+    } else {
+      copyFileSync(module.currentPath, dest);
+    }
+  }
 }

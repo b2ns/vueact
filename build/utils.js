@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs';
-import { extname, isAbsolute } from 'path';
+import { existsSync, readdirSync, statSync, watch } from 'fs';
+import { extname, isAbsolute, join } from 'path';
 
 export const CommentTypes = {
   ONE_LINE: '/',
@@ -32,8 +32,53 @@ export function isImport(code, index) {
 
 export const isRelative = (pathname) => pathname.startsWith('./') || pathname.startsWith('..');
 
-// TODO: ignore node builtin lib
-export const inNodeModules = (pathname) => !isAbsolute(pathname) && !isRelative(pathname);
+export const isNodeBuiltin = (pathname) =>
+  [
+    'assert',
+    'async_hooks',
+    'buffer',
+    'child_process',
+    'cluster',
+    'console',
+    'constants',
+    'crypto',
+    'dgram',
+    'diagnostics_channel',
+    'dns',
+    'domain',
+    'events',
+    'fs',
+    'http',
+    'http2',
+    'https',
+    'inspector',
+    'module',
+    'net',
+    'os',
+    'path',
+    'perf_hooks',
+    'process',
+    'punycode',
+    'querystring',
+    'readline',
+    'repl',
+    'stream',
+    'string_decoder',
+    'timers',
+    'tls',
+    'trace_events',
+    'tty',
+    'url',
+    'util',
+    'v8',
+    'vm',
+    'wasi',
+    'worker_threads',
+    'zlib',
+  ].includes(pathname);
+
+// for browser there is no need to check node builtin module
+export const isNpmModule = (pathname) => !isAbsolute(pathname) && !isRelative(pathname);
 
 export function escape(str, chars) {
   if (!chars) {
@@ -60,7 +105,7 @@ export function parseArgs(args) {
   const res = { files: [] };
   for (const arg of args) {
     const segments = arg.split('=');
-    if (segments.length == 2) {
+    if (segments.length === 2) {
       res[segments[0].replace(/^-*/, '')] = segments[1];
     } else if (arg.startsWith('-')) {
       res[arg.replace(/^-*/, '')] = true;
@@ -132,9 +177,20 @@ export function handleQuotedCode(sourceCode, index) {
   return [code, i];
 }
 
-export function resolveImportModules(sourceCode, resolveOpts = {}) {
+export function resolveModuleImport(sourceCode, resolveOpts = {}) {
   const { alias } = resolveOpts;
-  const importModules = new Set();
+  const ast = [];
+  let code = '';
+
+  function stageOtherCode() {
+    if (code) {
+      ast.push({
+        type: 'other',
+        rawCode: code,
+      });
+      code = '';
+    }
+  }
 
   let i = 0;
   while (i < sourceCode.length) {
@@ -142,48 +198,63 @@ export function resolveImportModules(sourceCode, resolveOpts = {}) {
     const nextChar = sourceCode[i + 1];
 
     if (isComment(char, nextChar)) {
-      const [_, nextIndex] = handleCommentCode(sourceCode, i);
+      stageOtherCode();
+      const [commentCode, nextIndex] = handleCommentCode(sourceCode, i);
+      ast.push({
+        type: 'comment',
+        code: commentCode,
+      });
       i = nextIndex;
       continue;
     }
 
     if (isQuote(char)) {
-      const [_, nextIndex] = handleQuotedCode(sourceCode, i);
+      const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
+      code += quotedCode;
       i = nextIndex;
       continue;
     }
 
     if (isImport(sourceCode, i)) {
-      const [moduleName, nextIndex] = getModuleName(sourceCode, i);
-      importModules.add(moduleName);
+      stageOtherCode();
+      const [{ code: rawCode, pathname }, nextIndex] = getImportStatement(sourceCode, i);
+      ast.push({
+        type: 'import',
+        rawCode,
+        rawPathname: pathname,
+        code: rawCode,
+        pathname,
+        absPath: pathname,
+      });
       i = nextIndex;
       continue;
     }
 
+    code += char;
     i++;
   }
-
-  let modules = [...importModules];
+  stageOtherCode();
 
   let aliasKeys = '';
   if (alias && (aliasKeys = Object.keys(alias).join('|'))) {
     const aliasRE = new RegExp(`^${aliasKeys}`);
-    const tmpSet = new Set();
-    for (const module of modules) {
-      if (aliasRE.test(module)) {
-        tmpSet.add(module.replace(aliasRE, (m) => alias[m]));
-      } else {
-        tmpSet.add(module);
+    for (const node of ast) {
+      if (node.type !== 'import') {
+        continue;
+      }
+      if (aliasRE.test(node.pathname)) {
+        node.absPath = node.pathname = node.pathname.replace(aliasRE, (m) => alias[m]);
+        node.code = node.code.replace(node.rawPathname, node.pathname);
       }
     }
-    modules = [...tmpSet];
   }
 
-  return modules;
+  return ast;
 }
 
-export function getModuleName(sourceCode, index) {
-  let moduleName = '';
+export function getImportStatement(sourceCode, index) {
+  let code = '';
+  let pathname = '';
 
   let i = index;
   while (i < sourceCode.length) {
@@ -191,30 +262,55 @@ export function getModuleName(sourceCode, index) {
     const nextChar = sourceCode[i + 1];
 
     if (isComment(char, nextChar)) {
-      const [_, nextIndex] = handleCommentCode(sourceCode, i);
+      const [commentCode, nextIndex] = handleCommentCode(sourceCode, i);
+      code += commentCode;
       i = nextIndex;
       continue;
     }
 
     if (isQuote(char)) {
       const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
-      moduleName = quotedCode.slice(1, -1);
+      pathname = quotedCode.slice(1, -1);
+      code += quotedCode;
       i = nextIndex;
+      continue;
+    }
+
+    if (pathname && (char === ';' || isNewLine(char))) {
+      code += char;
+      i++;
       break;
     }
 
+    code += char;
     i++;
   }
 
-  return [moduleName, i];
+  return [{ code, pathname }, i];
 }
 
-const EXTENSIONS = ['js', 'jsx', 'json', 'ts', 'tsx', 'vue', 'mjs'];
+export function genCodeFromAST(ast) {
+  let code = '';
+  for (const node of ast) {
+    if ('code' in node) {
+      code += node.code;
+    } else {
+      code += node.rawCode;
+    }
+  }
+  return code;
+}
+
+export function shouldResolveModule(pathname) {
+  return ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.vue'].includes(extname(pathname));
+}
+
+export const GUESS_EXTENSIONS = ['js', 'jsx', 'json', 'ts', 'tsx', 'vue', 'mjs'];
 export function normalizePathname(pathname, extensions) {
   const ext = extname(pathname);
 
   if (!ext) {
-    for (const ext of extensions || EXTENSIONS) {
+    for (const ext of extensions || GUESS_EXTENSIONS) {
       if (existsSync(`${pathname}.${ext}`)) {
         pathname = `${pathname}.${ext}`;
         return pathname;
@@ -224,4 +320,27 @@ export function normalizePathname(pathname, extensions) {
   }
 
   return pathname;
+}
+
+export function recursiveWatch(dir, handler) {
+  watch(dir, (event, filename) => handler(event, join(dir, filename)));
+  const dirs = readdirSync(dir);
+  for (let file of dirs) {
+    file = join(dir, file);
+    if (statSync(file).isDirectory()) {
+      recursiveWatch(file, handler);
+    }
+  }
+}
+
+export function log(...args) {
+  // eslint-disable-next-line no-console
+  console.log(...args);
+}
+
+export function removeItem(arr, item) {
+  const index = arr.indexOf(item);
+  if (index >= 0) {
+    arr.splice(index, 1);
+  }
 }

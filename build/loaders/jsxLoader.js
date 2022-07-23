@@ -1,4 +1,4 @@
-function jsxLoader(content, opts, { changeExtension }) {
-  changeExtension('.js');
-  return content;
-}
+export default ({ changeExtension }) => {
+  // TODO
+  changeExtension('js');
+};
