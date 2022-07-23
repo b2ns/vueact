@@ -4,6 +4,7 @@ import jsLoader from './loaders/jsLoader.js';
 import jsxLoader from './loaders/jsxLoader.js';
 import cssLoader from './loaders/cssLoader.js';
 import styleLoader from './loaders/styleLoader.js';
+import copyPlugin from './plugins/copyPlugin.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const r = (p = './') => resolve(__dirname, '..', p);
@@ -21,10 +22,7 @@ export default {
   loaders: [
     {
       test: /\.css$/,
-      use: [
-        styleLoader,
-        cssLoader
-      ],
+      use: [styleLoader, cssLoader],
     },
     {
       test: /\.js$/,
@@ -37,5 +35,5 @@ export default {
       use: [jsxLoader],
     },
   ],
-  plugins: [],
+  plugins: [[copyPlugin, { from: r('./index.html'), to: r('./dist/index.html') }]],
 };

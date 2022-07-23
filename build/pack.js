@@ -14,7 +14,7 @@ import {
 } from './utils.js';
 
 export default function pack(config = {}) {
-  let { root = './', entry = './src/main.js', output = './dist', resolve: resolveOpts, loaders, watch } = config;
+  let { root = './', entry = './src/main.js', output = './dist', resolve: resolveOpts, loaders, plugins, watch } = config;
 
   const projectRoot = resolve(root);
   const r = (p) => resolve(projectRoot, p);
@@ -29,6 +29,8 @@ export default function pack(config = {}) {
   applyLoader([...importedModules.values()], loaders);
 
   writeContent([...importedModules.values()], output, projectRoot);
+
+  runPlugins(plugins);
 
   log('build done');
 
@@ -171,8 +173,8 @@ function applyLoader(modules, loaders) {
         for (let fn of use) {
           let opts = null;
           if (Array.isArray(fn)) {
-            fn = fn[0];
             opts = fn[1];
+            fn = fn[0];
           }
           fn(
             {
@@ -247,5 +249,20 @@ function writeContent(modules, output, projectRoot) {
     } else {
       copyFileSync(module.currentPath, dest);
     }
+  }
+}
+
+function runPlugins(plugins) {
+  if (!plugins || !plugins.length) {
+    return;
+  }
+
+  for (let plugin of plugins) {
+    let opts = null;
+    if (Array.isArray(plugin)) {
+      opts = plugin[1];
+      plugin = plugin[0];
+    }
+    plugin(null, opts);
   }
 }
