@@ -2,6 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { dirname, extname, join, relative, resolve } from 'path';
 import {
   debounce,
+  ensureArray,
   genCodeFromAST,
   isNpmModule,
   isRelative,
@@ -152,7 +153,9 @@ function applyLoader(modules, loaders) {
     return;
   }
 
-  doApply(Array.isArray(modules) ? modules : [modules]);
+  modules = ensureArray(modules);
+
+  doApply(modules);
 
   function doApply(modules) {
     const extensionChangedModules = new Set();
@@ -224,9 +227,7 @@ function noWrite(module) {
  * write to the disk
  */
 function writeContent(modules, output, projectRoot) {
-  if (!Array.isArray(modules)) {
-    modules = [modules];
-  }
+  modules = ensureArray(modules);
 
   if (!existsSync(output)) {
     mkdirSync(output);

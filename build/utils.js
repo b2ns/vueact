@@ -344,3 +344,10 @@ export function removeItem(arr, item) {
     arr.splice(index, 1);
   }
 }
+
+export function ensureArray(val) {
+  if (Array.isArray(val)) {
+    return val;
+  }
+  return val == null ? val : [val];
+}

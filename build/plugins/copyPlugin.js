@@ -1,13 +1,12 @@
 import { copyFileSync, existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { ensureArray } from '../utils.js';
 
 export default (_, opts) => {
   if (!opts) {
     return;
   }
-  if (!Array.isArray(opts)) {
-    opts = [opts];
-  }
+  opts = ensureArray(opts);
   for (const opt of opts) {
     const { from, to } = opt;
     const toDir = dirname(to);
