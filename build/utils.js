@@ -20,7 +20,6 @@ export const isNewLine = (char) => /[\n\r]/.test(char);
 
 export function isImport(code, index) {
   return (
-    index + 5 < code.length &&
     code[index] === 'i' &&
     code[index + 1] === 'm' &&
     code[index + 2] === 'p' &&
