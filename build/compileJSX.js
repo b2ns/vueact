@@ -26,7 +26,7 @@ export function compile(sourceCode) {
       continue;
     }
 
-    if (isJSX(char, nextChar)) {
+    if (isJSX(sourceCode, i)) {
       const [jsxCode, nextIndex] = compileJSX(sourceCode, i);
       code += jsxCode;
       i = nextIndex;
@@ -187,7 +187,7 @@ export function compileJSX(sourceCode, index) {
         const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
         dynamicVal += quotedCode;
         i = nextIndex - 1;
-      } else if (isJSX(char, nextChar)) {
+      } else if (isJSX(sourceCode, i)) {
         const [jsxCode, nextIndex] = compileJSX(sourceCode, i);
         dynamicVal += jsxCode;
         i = nextIndex - 1;
@@ -297,7 +297,41 @@ export function compileJSX(sourceCode, index) {
   return [genCode(root), i];
 }
 
-export const isJSX = (char, nextChar) => char === '<' && /[a-z_]/i.test(nextChar);
+export function isJSX(sourceCode, i) {
+  const char = sourceCode[i];
+  const nextChar = sourceCode[i + 1];
+  if (char === '<' && /[a-z_]/i.test(nextChar)) {
+    // fix: when use '<' as less-than sign
+    for (let j = i - 1; j >= 0; j--) {
+      const ch = sourceCode[j];
+      if (/\s/.test(ch)) {
+        continue;
+      }
+
+      // special case: return <div
+      if (
+        ch === 'n' &&
+        sourceCode[j - 1] === 'r' &&
+        sourceCode[j - 2] === 'u' &&
+        sourceCode[j - 3] === 't' &&
+        sourceCode[j - 4] === 'e' &&
+        sourceCode[j - 5] === 'r'
+      ) {
+        return true;
+      }
+
+      // 2 <div
+      // _varname <div
+      // invoke() <div
+      if (/[\w)]/.test(ch)) {
+        return false;
+      }
+
+      return true;
+    }
+  }
+  return false;
+}
 
 function genCode(nodes) {
   let code = '';
