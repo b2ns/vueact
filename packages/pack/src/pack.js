@@ -128,8 +128,18 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
         if (isRelative(node.absPath)) {
           node.absPath = join(rootDir, node.absPath);
         } else if (isNpmModule(node.absPath)) {
-          projectRoot_ = join(projectRoot_, 'node_modules', node.absPath);
-          node.absPath = join(projectRoot_, 'index.js');
+          let pkgName = node.absPath;
+          let filename = 'index.js';
+          if (extname(node.absPath)) {
+            const segs = node.absPath.split('/');
+            pkgName = segs
+              .slice(0, node.absPath.startsWith('@') ? 2 : 1)
+              .join('/');
+            filename = node.absPath.replace(pkgName, '');
+          }
+
+          projectRoot_ = join(projectRoot_, 'node_modules', pkgName);
+          node.absPath = join(projectRoot_, filename);
 
           // change ast pathname and code
           // vueact -> /abs/path/to/project/node_modules/vueact/index.js

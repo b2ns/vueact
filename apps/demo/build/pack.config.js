@@ -17,7 +17,7 @@ export default {
   output: './dist',
   resolve: {
     alias: {
-      '@': './src',
+      '#': './src',
     },
   },
   loaders: [

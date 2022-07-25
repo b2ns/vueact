@@ -1,6 +1,7 @@
-import { isRelative } from '@vueact/shared';
+import { isRelative } from '@vueact/shared/src/node-utils.js';
 import { existsSync } from 'fs';
 import { extname, isAbsolute } from 'path';
+export * from '@vueact/shared/src/node-utils.js';
 export * from '@vueact/shared';
 
 export const CommentTypes = {
