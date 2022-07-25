@@ -3,18 +3,18 @@
   "name": "vueact",
   "version": "1.0.0",
   "description": "a toy mixing Vue and React features",
-  "main": "index.js",
-  "scripts": {
-    "dev": "node build/index.js --watch",
-    "build": "node build/index.js",
-    "clear": "rm -rf dist"
-  },
-  "type": "module",
   "keywords": [
     "vue",
     "vue3",
     "react"
   ],
   "author": "b2ns",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {},
+  "devDependencies": {
+    "vueact": "workspace:*"
+  },
+  "packageManager": "pnpm@7.6.0",
   "license": "MIT"
 }

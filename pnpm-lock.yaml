@@ -1,0 +1,54 @@
+lockfileVersion: 5.4
+
+importers:
+
+  apps/demo:
+    specifiers:
+      '@vueact/pack': workspace:^1.0.0
+      '@vueact/shared': workspace:^1.0.0
+      vueact: workspace:^1.0.0
+    dependencies:
+      '@vueact/shared': link:../../packages/shared
+      vueact: link:../../packages/vueact
+    devDependencies:
+      '@vueact/pack': link:../../packages/pack
+
+  packages/pack:
+    specifiers:
+      '@vueact/shared': workspace:^1.0.0
+    dependencies:
+      '@vueact/shared': link:../shared
+
+  packages/reactivity:
+    specifiers:
+      '@vueact/shared': workspace:^1.0.0
+    dependencies:
+      '@vueact/shared': link:../shared
+
+  packages/runtime-core:
+    specifiers:
+      '@vueact/reactivity': workspace:^1.0.0
+      '@vueact/shared': workspace:^1.0.0
+    dependencies:
+      '@vueact/reactivity': link:../reactivity
+      '@vueact/shared': link:../shared
+
+  packages/runtime-dom:
+    specifiers:
+      '@vueact/runtime-core': workspace:^1.0.0
+      '@vueact/shared': workspace:^1.0.0
+    dependencies:
+      '@vueact/runtime-core': link:../runtime-core
+      '@vueact/shared': link:../shared
+
+  packages/vueact:
+    specifiers:
+      '@vueact/reactivity': workspace:^1.0.0
+      '@vueact/runtime-core': workspace:^1.0.0
+      '@vueact/runtime-dom': workspace:^1.0.0
+      '@vueact/shared': workspace:^1.0.0
+    dependencies:
+      '@vueact/reactivity': link:../reactivity
+      '@vueact/runtime-core': link:../runtime-core
+      '@vueact/runtime-dom': link:../runtime-dom
+      '@vueact/shared': link:../shared
