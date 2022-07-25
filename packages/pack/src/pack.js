@@ -10,7 +10,7 @@ import {
   debounce,
   ensureArray,
   genCodeFromAST,
-  isNpmModule,
+  isPkg,
   isRelative,
   log,
   normalizePathname,
@@ -93,26 +93,27 @@ export default function pack(config = {}) {
  * resolve dependence graph
  */
 function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
-  const dependencis = doResolve(entry, projectRoot, null);
+  const dependencis = doResolve(entry, null, '', projectRoot);
 
-  function doResolve(absPath, projectRoot, parentModule) {
+  function doResolve(absPath, parentModule, pkg, pkgRoot) {
     const id = normalizePathname(
       absPath,
       resolveOpts && resolveOpts.extensions
     );
 
-    const cached = cachedMap.get(id);
+    const cached = cachedMap.get(pkg || id);
     if (cached) {
       cached.parents.push(parentModule);
       return cached;
     }
 
     const module = createModule(id);
-    module.parents.push(parentModule);
-    cachedMap.set(id, module);
+    cachedMap.set(pkg || id, module);
+    module.pkg = pkg ? pkg : parentModule && parentModule.pkg;
+    parentModule && module.parents.push(parentModule);
 
     if (shouldResolveModule(module.id)) {
-      const rootDir = dirname(id);
+      const cwd = dirname(id);
       const sourceCode = readFileSync(id, { encoding: 'utf-8' });
       const ast = resolveModuleImport(sourceCode, resolveOpts);
       module.ast = ast;
@@ -122,32 +123,55 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
           continue;
         }
 
+        let rawPkg = '';
+        let _pkgRoot = pkgRoot;
+
         node.absPath = node.pathname;
 
-        let projectRoot_ = projectRoot;
-        if (isRelative(node.absPath)) {
-          node.absPath = join(rootDir, node.absPath);
-        } else if (isNpmModule(node.absPath)) {
-          let pkgName = node.absPath;
-          let filename = 'index.js';
-          if (extname(node.absPath)) {
-            const segs = node.absPath.split('/');
-            pkgName = segs
-              .slice(0, node.absPath.startsWith('@') ? 2 : 1)
-              .join('/');
-            filename = node.absPath.replace(pkgName, '');
+        if (isRelative(node.pathname)) {
+          node.absPath = join(cwd, node.pathname);
+        } else if (isPkg(node.pathname)) {
+          rawPkg = node.pathname;
+
+          let pkgName = rawPkg;
+          // looking for index.js as main entry in package
+          let entry = 'index.js';
+
+          // if starts with '@', means it's a scoped package
+          const isScoped = pkgName.startsWith('@');
+          const segments = pkgName.split('/');
+          const cuttingIndex = isScoped ? 2 : 1;
+
+          // import specific file
+          // e.g. import xxx from '@vueact/shared/src/xxx.js'
+          if (segments.length > cuttingIndex) {
+            pkgName = segments.slice(0, cuttingIndex).join('/');
+            entry = segments(cuttingIndex).join('/');
           }
 
-          projectRoot_ = join(projectRoot_, 'node_modules', pkgName);
-          node.absPath = join(projectRoot_, filename);
+          _pkgRoot = join(pkgRoot, 'node_modules', pkgName);
+          node.absPath = join(_pkgRoot, entry);
 
           // change ast pathname and code
-          // vueact -> /abs/path/to/project/node_modules/vueact/index.js
-          node.code = node.code.replace(node.pathname, node.absPath);
-          node.pathname = node.absPath;
+          // vueact -> /relative/path/to/vueact/index.js
+          let relativePath = relative(cwd, node.absPath);
+
+          // nested package
+          if (cwd.includes('node_modules')) {
+            // flaten the structure, put all node package at the top level
+            relativePath = '../' + relativePath.replace(/node_modules\//g, '');
+            if (module.pkg.startsWith('@')) {
+              relativePath = '../' + relativePath;
+            }
+          }
+
+          node.pathname = relativePath;
+          node.code = node.code.replace(rawPkg, relativePath);
         }
 
-        module.dependencis.push(doResolve(node.absPath, projectRoot_, module));
+        module.dependencis.push(
+          doResolve(node.absPath, module, rawPkg, _pkgRoot)
+        );
       }
     }
 
@@ -164,6 +188,7 @@ function createModule(id) {
     currentPath: id,
     ast: null,
     noWrite: false,
+    pkg: '',
     parents: [],
     dependencis: [],
   };
@@ -278,7 +303,16 @@ function writeContent(modules, output, projectRoot) {
       continue;
     }
 
-    const dest = join(output, relative(projectRoot, module.currentPath));
+    let { currentPath } = module;
+    // flatten the package in node_modules
+    // and put all package at the same directory: __pack__
+    if (currentPath.includes('node_modules')) {
+      currentPath = currentPath.replace(
+        /node_modules.+node_modules/g,
+        'node_modules'
+      );
+    }
+    const dest = join(output, relative(projectRoot, currentPath));
     const dir = dirname(dest);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });

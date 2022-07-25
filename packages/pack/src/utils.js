@@ -83,7 +83,7 @@ export function isImport(code, index) {
 }
 
 // for browser there is no need to check node builtin module
-export const isNpmModule = (pathname) =>
+export const isPkg = (pathname) =>
   !isAbsolute(pathname) && !isRelative(pathname);
 
 export function handleCommentCode(sourceCode, index) {
