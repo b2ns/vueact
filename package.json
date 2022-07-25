@@ -10,9 +10,24 @@
   ],
   "author": "b2ns",
   "main": "index.js",
-  "type": "module",
-  "scripts": {},
+  "scripts": {
+    "lint": "eslint --ext .js,.jsx packages/*/src",
+    "fix": "eslint --fix --ext .js,.jsx packages/*/src",
+    "format": "prettier --write \"packages/**/*.js?(x)\"",
+    "prepare": "husky install"
+  },
+  "lint-staged": {
+    "*.{js,jsx}": [
+      "eslint",
+      "prettier --write"
+    ]
+  },
   "devDependencies": {
+    "eslint": "^8.20.0",
+    "eslint-plugin-react": "^7.30.1",
+    "husky": "^8.0.0",
+    "lint-staged": "^13.0.3",
+    "prettier": "^2.7.1",
     "vueact": "workspace:*"
   },
   "packageManager": "pnpm@7.6.0",
