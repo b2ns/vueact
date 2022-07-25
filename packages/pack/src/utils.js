@@ -14,29 +14,83 @@ export const QuoteTypes = {
   BACK: '`',
 };
 
-export const isComment = (char, nextChar) => char === '/' && (nextChar === CommentTypes.ONE_LINE || nextChar === CommentTypes.MULTI_LINE);
+export const isComment = (char, nextChar) =>
+  char === '/' &&
+  (nextChar === CommentTypes.ONE_LINE || nextChar === CommentTypes.MULTI_LINE);
 
-export const isQuote = (char) => char === QuoteTypes.SINGLE || char === QuoteTypes.DOUBLE || char === QuoteTypes.BACK;
+export const isQuote = (char) =>
+  char === QuoteTypes.SINGLE ||
+  char === QuoteTypes.DOUBLE ||
+  char === QuoteTypes.BACK;
 
 export const isNewLine = (char) => /[\n\r]/.test(char);
 
 export function isImport(code, index) {
-  return (
+  if (
     code[index] === 'i' &&
     code[index + 1] === 'm' &&
     code[index + 2] === 'p' &&
     code[index + 3] === 'o' &&
     code[index + 4] === 'r' &&
     code[index + 5] === 't'
-  );
+  ) {
+    return true;
+  }
+
+  if (
+    code[index] === 'e' &&
+    code[index + 1] === 'x' &&
+    code[index + 2] === 'p' &&
+    code[index + 3] === 'o' &&
+    code[index + 4] === 'r' &&
+    code[index + 5] === 't'
+  ) {
+    let inCurly = false;
+    let i = index + 6;
+    while (i < code.length) {
+      const char = code[i];
+      const nextChar = code[i + 1];
+      if (inCurly) {
+        if (char === '}') {
+          inCurly = false;
+        }
+        i++;
+        continue;
+      }
+      if (char === '{') {
+        inCurly = true;
+        i++;
+        continue;
+      }
+      if (
+        (char === 'a' && nextChar === 's') ||
+        (char === 'f' &&
+          nextChar === 'r' &&
+          code[i + 2] === 'o' &&
+          code[i + 3] === 'm')
+      ) {
+        return true;
+      }
+      if (!/[*\s]/.test(char)) {
+        return false;
+      }
+      i++;
+    }
+  }
+
+  return false;
 }
 
 // for browser there is no need to check node builtin module
-export const isNpmModule = (pathname) => !isAbsolute(pathname) && !isRelative(pathname);
+export const isNpmModule = (pathname) =>
+  !isAbsolute(pathname) && !isRelative(pathname);
 
 export function handleCommentCode(sourceCode, index) {
   let code = '';
-  const commentType = sourceCode[index + 1] === CommentTypes.MULTI_LINE ? CommentTypes.MULTI_LINE : CommentTypes.ONE_LINE;
+  const commentType =
+    sourceCode[index + 1] === CommentTypes.MULTI_LINE
+      ? CommentTypes.MULTI_LINE
+      : CommentTypes.ONE_LINE;
 
   let i = index;
   while (i < sourceCode.length) {
@@ -125,7 +179,10 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
 
     if (isImport(sourceCode, i)) {
       stageOtherCode();
-      const [{ code: rawCode, pathname }, nextIndex] = getImportStatement(sourceCode, i);
+      const [{ code: rawCode, pathname }, nextIndex] = getImportStatement(
+        sourceCode,
+        i
+      );
       ast.push({
         type: 'import',
         rawCode,
@@ -151,7 +208,10 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
         continue;
       }
       if (aliasRE.test(node.pathname)) {
-        node.absPath = node.pathname = node.pathname.replace(aliasRE, (m) => alias[m]);
+        node.absPath = node.pathname = node.pathname.replace(
+          aliasRE,
+          (m) => alias[m]
+        );
         node.code = node.code.replace(node.rawPathname, node.pathname);
       }
     }
@@ -210,10 +270,20 @@ export function genCodeFromAST(ast) {
 }
 
 export function shouldResolveModule(pathname) {
-  return ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.vue'].includes(extname(pathname));
+  return ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.vue'].includes(
+    extname(pathname)
+  );
 }
 
-export const GUESS_EXTENSIONS = ['js', 'jsx', 'json', 'ts', 'tsx', 'vue', 'mjs'];
+export const GUESS_EXTENSIONS = [
+  'js',
+  'jsx',
+  'json',
+  'ts',
+  'tsx',
+  'vue',
+  'mjs',
+];
 export function normalizePathname(pathname, extensions) {
   const ext = extname(pathname);
 
