@@ -1,4 +1,10 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs';
 import { dirname, extname, join, relative, resolve } from 'path';
 import {
   debounce,
@@ -15,7 +21,15 @@ import {
 } from './utils.js';
 
 export default function pack(config = {}) {
-  let { root = './', entry = './src/main.js', output = './dist', resolve: resolveOpts, loaders, plugins, watch } = config;
+  let {
+    root = './',
+    entry = './src/main.js',
+    output = './dist',
+    resolve: resolveOpts,
+    loaders,
+    plugins,
+    watch,
+  } = config;
 
   const projectRoot = resolve(root);
   const r = (p) => resolve(projectRoot, p);
@@ -25,7 +39,7 @@ export default function pack(config = {}) {
 
   const importedModules = new Map();
 
-  resolveDependencis(entry, importedModules, resolveOpts);
+  resolveDependencis(entry, projectRoot, importedModules, resolveOpts);
 
   applyLoader([...importedModules.values()], loaders);
 
@@ -59,7 +73,12 @@ export default function pack(config = {}) {
 
       removeModule(module, importedModules);
 
-      module = resolveDependencis(module.id, importedModules, resolveOpts);
+      module = resolveDependencis(
+        module.id,
+        projectRoot,
+        importedModules,
+        resolveOpts
+      );
 
       applyLoader(module, loaders);
 
@@ -73,11 +92,14 @@ export default function pack(config = {}) {
 /*
  * resolve dependence graph
  */
-function resolveDependencis(entry, cachedMap, resolveOpts) {
-  const dependencis = doResolve(entry, null);
+function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
+  const dependencis = doResolve(entry, projectRoot, null);
 
-  function doResolve(absPath, parentModule) {
-    const id = normalizePathname(absPath, resolveOpts && resolveOpts.extensions);
+  function doResolve(absPath, projectRoot, parentModule) {
+    const id = normalizePathname(
+      absPath,
+      resolveOpts && resolveOpts.extensions
+    );
 
     const cached = cachedMap.get(id);
     if (cached) {
@@ -102,13 +124,20 @@ function resolveDependencis(entry, cachedMap, resolveOpts) {
 
         node.absPath = node.pathname;
 
+        let projectRoot_ = projectRoot;
         if (isRelative(node.absPath)) {
           node.absPath = join(rootDir, node.absPath);
         } else if (isNpmModule(node.absPath)) {
-          // TODO: import from node_modules
+          projectRoot_ = join(projectRoot_, 'node_modules', node.absPath);
+          node.absPath = join(projectRoot_, 'index.js');
+
+          // change ast pathname and code
+          // vueact -> /abs/path/to/project/node_modules/vueact/index.js
+          node.code = node.code.replace(node.pathname, node.absPath);
+          node.pathname = node.absPath;
         }
 
-        module.dependencis.push(doResolve(node.absPath, module));
+        module.dependencis.push(doResolve(node.absPath, projectRoot_, module));
       }
     }
 
@@ -167,7 +196,8 @@ function applyLoader(modules, loaders) {
           !loader.test.test(module.currentPath) ||
           !loader.use ||
           !loader.use.length ||
-          (loader.exclude && loader.exclude.some((pattern) => pattern.test(module.currentPath)))
+          (loader.exclude &&
+            loader.exclude.some((pattern) => pattern.test(module.currentPath)))
         ) {
           continue;
         }
@@ -230,7 +260,7 @@ function writeContent(modules, output, projectRoot) {
   modules = ensureArray(modules);
 
   if (!existsSync(output)) {
-    mkdirSync(output);
+    mkdirSync(output, { recursive: true });
   }
 
   for (const module of modules) {
@@ -241,7 +271,7 @@ function writeContent(modules, output, projectRoot) {
     const dest = join(output, relative(projectRoot, module.currentPath));
     const dir = dirname(dest);
     if (!existsSync(dir)) {
-      mkdirSync(dir);
+      mkdirSync(dir, { recursive: true });
     }
 
     if (module.ast) {

@@ -5,6 +5,8 @@ export default ({ ast }) => {
     if (node.type === 'import') {
       const { pathname, code } = node;
       const ext = extname(pathname);
+      // App -> App.js
+      // App.jsx -> App.js
       if (!ext) {
         node.pathname = `${pathname}.js`;
       } else if (['.jsx', '.ts', '.tsx', '.mjs'].includes(ext)) {
