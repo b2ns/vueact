@@ -9,6 +9,7 @@ import { dirname, extname, join, relative, resolve } from 'path';
 import {
   debounce,
   ensureArray,
+  fixExtension,
   genCodeFromAST,
   isPkg,
   isRelative,
@@ -168,6 +169,11 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
           node.pathname = relativePath;
           node.code = node.code.replace(rawPkg, relativePath);
         }
+
+        // ensure all extension change to '.js'
+        // App -> App.js
+        // App.jsx -> App.js
+        fixExtension(node);
 
         module.dependencis.push(
           doResolve(node.absPath, module, rawPkg, _pkgRoot)

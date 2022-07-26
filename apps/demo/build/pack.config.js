@@ -1,12 +1,6 @@
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import {
-  jsLoader,
-  jsxLoader,
-  cssLoader,
-  styleLoader,
-  copyPlugin,
-} from '@vueact/pack';
+import { jsxLoader, cssLoader, styleLoader, copyPlugin } from '@vueact/pack';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const r = (p = './') => resolve(__dirname, '..', p);
@@ -28,7 +22,7 @@ export default {
     {
       test: /\.js$/,
       exclude: [/node_modules/],
-      use: [jsLoader],
+      use: [],
     },
     {
       test: /\.jsx$/,
