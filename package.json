@@ -12,9 +12,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "lint": "eslint --ext .js,.jsx packages/*/src",
-    "fix": "eslint --fix --ext .js,.jsx packages/*/src",
-    "format": "prettier --write \"packages/**/*.js?(x)\"",
+    "lint": "eslint --ext .js,.jsx packages/*/src apps/*/src",
+    "fix": "eslint --fix --ext .js,.jsx packages/*/src apps/*/src",
+    "format": "prettier --write \"{packages,apps}/*/src/**/*.js?(x)\"",
     "prepare": "husky install"
   },
   "lint-staged": {
