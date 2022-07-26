@@ -89,7 +89,7 @@ module.exports = {
     'computed-property-spacing': 'warn',
     // 'eol-last': 'warn',
     'func-call-spacing': 'warn',
-    'function-paren-newline': 'warn',
+    // 'function-paren-newline': 'warn',
     'generator-star-spacing': 'warn',
     // 'implicit-arrow-linebreak': 'warn',
     // 'indent': ['warn', 2],

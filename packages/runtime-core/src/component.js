@@ -1,4 +1,9 @@
-import { pauseTracking, reactive, resetTracking, toRaw } from '@vueact/reactivity';
+import {
+  pauseTracking,
+  reactive,
+  resetTracking,
+  toRaw,
+} from '@vueact/reactivity';
 import { EMPTY_OBJ, hasOwn } from '@vueact/shared';
 import { h } from './vnode.js';
 
@@ -50,9 +55,7 @@ export function createComponentInstance(vnode, parent) {
 }
 
 export let currentInstance = null;
-export const getCurrentInstance = () => {
-  return currentInstance;
-};
+export const getCurrentInstance = () => currentInstance;
 export const setCurrentInstance = (instance = null) => {
   currentInstance = instance;
 };
@@ -88,7 +91,7 @@ export function shouldUpdateComponent(prevVNode, nextVNode) {
     return false;
   }
   if (!prevProps) {
-    return !!nextProps;
+    return Boolean(nextProps);
   }
   if (!nextProps) {
     return true;

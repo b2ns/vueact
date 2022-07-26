@@ -21,18 +21,27 @@ export const isFunction = (val) => typeof val === 'function';
 
 export const hasChanged = (value, oldValue) => !Object.is(value, oldValue);
 
-export const hasOwn = (val, key) => Object.prototype.hasOwnProperty.call(val, key);
+export const hasOwn = (val, key) =>
+  Object.prototype.hasOwnProperty.call(val, key);
 
 export const NOOP = () => {};
 
 export const EMPTY_OBJ = {};
+
+export const EMPTY_ARR = [];
 
 const onRE = /^on[^a-z]/;
 
 export const isOn = (key) => onRE.test(key);
 
 export const toDisplayString = (val) =>
-  isString(val) ? val : val == null || isBoolean(val) ? '' : isArray(val) || isPlainObject(val) ? JSON.stringify(val, 2) : String(val);
+  isString(val)
+    ? val
+    : val == null || isBoolean(val)
+    ? ''
+    : isArray(val) || isPlainObject(val)
+    ? JSON.stringify(val, 2)
+    : String(val);
 
 export const invokeArrayFns = (fns, ...arg) => {
   for (let i = 0; i < fns.length; i++) {

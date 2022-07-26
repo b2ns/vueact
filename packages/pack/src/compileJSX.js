@@ -1,4 +1,10 @@
-import { escape, handleCommentCode, handleQuotedCode, isComment, isQuote } from './utils.js';
+import {
+  escape,
+  handleCommentCode,
+  handleQuotedCode,
+  isComment,
+  isQuote,
+} from './utils.js';
 
 export function compile(sourceCode) {
   let code = '';
@@ -153,7 +159,9 @@ export function compileJSX(sourceCode, index) {
           const node = getCurrentNode();
 
           if (node && tagNameEnd !== node.type) {
-            throw new Error(`${MSG}: tag not match <${node.type}></${tagNameEnd}>`);
+            throw new Error(
+              `${MSG}: tag not match <${node.type}></${tagNameEnd}>`
+            );
           }
 
           tagNameEnd = '';

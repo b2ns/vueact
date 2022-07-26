@@ -19,7 +19,7 @@ let currentFlushPromise = null;
 
 export function nextTick(fn) {
   const p = currentFlushPromise || resolvedPromise;
-  return fn ? p.then(this ? fn.bind(this) : fn) : p;
+  return fn ? p.then(fn) : p;
 }
 
 export function queueJob(job) {
@@ -46,7 +46,10 @@ function queueCb(cb, activeQueue, pendingQueue, index) {
   if (isArray(cb)) {
     pendingQueue.push(...cb);
   } else {
-    if (!activeQueue || !activeQueue.includes(cb, cb.allowRecurse ? index + 1 : index)) {
+    if (
+      !activeQueue ||
+      !activeQueue.includes(cb, cb.allowRecurse ? index + 1 : index)
+    ) {
       pendingQueue.push(cb);
     }
   }
@@ -81,7 +84,11 @@ export function flushPreFlushCbs() {
   if (pendingPreFlushCbs.length) {
     activePreFlushCbs = [...new Set(pendingPreFlushCbs)];
     pendingPreFlushCbs.length = 0;
-    for (preFlushIndex = 0; preFlushIndex < activePreFlushCbs.length; preFlushIndex++) {
+    for (
+      preFlushIndex = 0;
+      preFlushIndex < activePreFlushCbs.length;
+      preFlushIndex++
+    ) {
       activePreFlushCbs[preFlushIndex]();
     }
     activePreFlushCbs = null;
@@ -102,7 +109,11 @@ export function flushPostFlushCbs() {
 
     activePostFlushCbs = deduped;
 
-    for (postFlushIndex = 0; postFlushIndex < activePostFlushCbs.length; postFlushIndex++) {
+    for (
+      postFlushIndex = 0;
+      postFlushIndex < activePostFlushCbs.length;
+      postFlushIndex++
+    ) {
       activePostFlushCbs[postFlushIndex]();
     }
     activePostFlushCbs = null;

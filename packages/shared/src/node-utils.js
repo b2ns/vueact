@@ -1,7 +1,8 @@
 import { readdirSync, statSync, watch } from 'fs';
 import { join } from 'path';
 
-export const isRelative = (pathname) => pathname.startsWith('./') || pathname.startsWith('..');
+export const isRelative = (pathname) =>
+  pathname.startsWith('./') || pathname.startsWith('..');
 
 export const isNodeBuiltin = (pathname) =>
   [

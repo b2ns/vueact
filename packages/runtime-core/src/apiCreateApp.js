@@ -69,7 +69,7 @@ function createAppContext() {
     app: null,
     config: {
       globalProperties: {},
-      errorHandler: undefined,
+      errorHandler: void 0,
     },
     provides: Object.create(null),
   };

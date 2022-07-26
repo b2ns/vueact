@@ -38,7 +38,15 @@ export const render = createRenderer({
 
 const nativeOnRE = /^on[a-z]/;
 
-function patchProp(el, key, prevValue, nextValue, prevChildren, parentComponent, unmountChildren) {
+function patchProp(
+  el,
+  key,
+  prevValue,
+  nextValue,
+  prevChildren,
+  parentComponent,
+  unmountChildren
+) {
   if (key === 'class') {
     patchClass(el, nextValue);
   } else if (key === 'style') {
@@ -46,7 +54,14 @@ function patchProp(el, key, prevValue, nextValue, prevChildren, parentComponent,
   } else if (isOn(key)) {
     patchEvent(el, key, prevValue, nextValue, parentComponent);
   } else if (shouldSetAsProp(el, key, nextValue)) {
-    patchDOMProp(el, key, nextValue, prevChildren, parentComponent, unmountChildren);
+    patchDOMProp(
+      el,
+      key,
+      nextValue,
+      prevChildren,
+      parentComponent,
+      unmountChildren
+    );
   } else {
     patchAttr(el, key, nextValue, parentComponent);
   }
@@ -128,7 +143,14 @@ export function patchAttr(el, key, value) {
   }
 }
 
-export function patchDOMProp(el, key, value, prevChildren, parentComponent, unmountChildren) {
+export function patchDOMProp(
+  el,
+  key,
+  value,
+  prevChildren,
+  parentComponent,
+  unmountChildren
+) {
   if (key === 'innerHTML' || key === 'textContent') {
     if (prevChildren) {
       unmountChildren(prevChildren, parentComponent);
@@ -153,7 +175,7 @@ export function patchEvent(el, rawName, prevValue, nextValue) {
       el.addEventListener(name, invoker);
     } else if (existingInvoker) {
       el.removeEventListener(name, existingInvoker);
-      invokers[name] = undefined;
+      invokers[name] = void 0;
     }
   }
 }

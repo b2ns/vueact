@@ -1,4 +1,10 @@
-import { isArray, isObject, isString, isFunction, toDisplayString } from '@vueact/shared';
+import {
+  isArray,
+  isObject,
+  isString,
+  isFunction,
+  toDisplayString,
+} from '@vueact/shared';
 import { isProxy } from '@vueact/reactivity';
 
 export const ShapeFlags = {
@@ -11,7 +17,8 @@ export const ShapeFlags = {
   COMPONENT_SHOULD_KEEP_ALIVE: 1 << 8,
   COMPONENT_KEPT_ALIVE: 1 << 9,
 };
-ShapeFlags.COMPONENT = ShapeFlags.STATEFUL_COMPONENT | ShapeFlags.FUNCTIONAL_COMPONENT;
+ShapeFlags.COMPONENT =
+  ShapeFlags.STATEFUL_COMPONENT | ShapeFlags.FUNCTIONAL_COMPONENT;
 
 export const Text = Symbol('text vnode');
 
@@ -20,7 +27,11 @@ export function h(type, props, children) {
     children = [children];
   } else if (isArray(children)) {
     children = children.flat(1);
-    children = children.map((child) => (isVNode(child) || isFunction(child) ? child : createTextVNode(toDisplayString(child))));
+    children = children.map((child) =>
+      isVNode(child) || isFunction(child)
+        ? child
+        : createTextVNode(toDisplayString(child))
+    );
   } else if (children) {
     if (!isFunction(children)) {
       children = toDisplayString(children);
@@ -68,7 +79,12 @@ export function isSameVNodeType(n1, n2) {
   return n1.type === n2.type && n1.key === n2.key;
 }
 
-function createBaseVNode(type, props = null, children = null, shapeFlag = ShapeFlags.ELEMENT) {
+function createBaseVNode(
+  type,
+  props = null,
+  children = null,
+  shapeFlag = ShapeFlags.ELEMENT
+) {
   const vnode = {
     __v_isVNode: true,
     __v_skip: true,
@@ -88,7 +104,9 @@ function createBaseVNode(type, props = null, children = null, shapeFlag = ShapeF
   };
 
   if (children) {
-    vnode.shapeFlag |= isString(children) ? ShapeFlags.TEXT_CHILDREN : ShapeFlags.ARRAY_CHILDREN;
+    vnode.shapeFlag |= isString(children)
+      ? ShapeFlags.TEXT_CHILDREN
+      : ShapeFlags.ARRAY_CHILDREN;
   }
 
   return vnode;

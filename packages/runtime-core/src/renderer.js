@@ -1,7 +1,18 @@
-import { EMPTY_OBJ, invokeArrayFns } from '@vueact/shared';
+import {
+  flushPostFlushCbs,
+  queueJob,
+  queuePostFlushCb,
+  ReactiveEffect,
+} from '@vueact/reactivity';
+import { EMPTY_ARR, EMPTY_OBJ, invokeArrayFns } from '@vueact/shared';
+import {
+  createComponentInstance,
+  renderComponentRoot,
+  setupComponent,
+  shouldUpdateComponent,
+  updateProps,
+} from './component.js';
 import { isSameVNodeType, isVNode, ShapeFlags, Text } from './vnode.js';
-import { flushPostFlushCbs, queueJob, queuePostFlushCb, ReactiveEffect } from '@vueact/reactivity';
-import { createComponentInstance, renderComponentRoot, setupComponent, shouldUpdateComponent, updateProps } from './component.js';
 
 export function createRenderer(options) {
   return baseCreateRenderer(options);
@@ -71,14 +82,28 @@ function baseCreateRenderer({
     if (props) {
       for (const key in props) {
         if (Object.hasOwnProperty.call(props, key)) {
-          hostPatchProp(el, key, null, props[key], children, parentComponent, unmountChildren);
+          hostPatchProp(
+            el,
+            key,
+            null,
+            props[key],
+            children,
+            parentComponent,
+            unmountChildren
+          );
         }
       }
     }
 
     hostInsert(el, container, anchor);
   };
-  const mountChildren = (children, container, anchor, parentComponent, start = 0) => {
+  const mountChildren = (
+    children,
+    container,
+    anchor,
+    parentComponent,
+    start = 0
+  ) => {
     for (let i = start; i < children.length; i++) {
       patch(null, children[i], container, anchor, parentComponent);
     }
@@ -96,13 +121,29 @@ function baseCreateRenderer({
         const next = newProps[key];
         const prev = oldProps[key];
         if (next !== prev) {
-          hostPatchProp(el, key, prev, next, vnode.children, parentComponent, unmountChildren);
+          hostPatchProp(
+            el,
+            key,
+            prev,
+            next,
+            vnode.children,
+            parentComponent,
+            unmountChildren
+          );
         }
       }
       if (oldProps !== EMPTY_OBJ) {
         for (const key in oldProps) {
           if (!(key in newProps)) {
-            hostPatchProp(el, key, oldProps[key], null, vnode.children, parentComponent, unmountChildren);
+            hostPatchProp(
+              el,
+              key,
+              oldProps[key],
+              null,
+              vnode.children,
+              parentComponent,
+              unmountChildren
+            );
           }
         }
       }
@@ -117,7 +158,10 @@ function baseCreateRenderer({
     }
   };
   const mountComponent = (initialVNode, container, anchor, parentComponent) => {
-    const instance = (initialVNode.component = createComponentInstance(initialVNode, parentComponent));
+    const instance = (initialVNode.component = createComponentInstance(
+      initialVNode,
+      parentComponent
+    ));
 
     setupComponent(instance);
 
@@ -174,7 +218,13 @@ function baseCreateRenderer({
         const prevTree = instance.subTree;
         instance.subTree = nextTree;
 
-        patch(prevTree, nextTree, hostParentNode(prevTree.el), getNextHostNode(prevTree), instance);
+        patch(
+          prevTree,
+          nextTree,
+          hostParentNode(prevTree.el),
+          getNextHostNode(prevTree),
+          instance
+        );
 
         next.el = nextTree.el;
 
@@ -184,7 +234,10 @@ function baseCreateRenderer({
       }
     };
 
-    const effect = (instance.effect = new ReactiveEffect(componentUpdateFn, () => queueJob(update)));
+    const effect = (instance.effect = new ReactiveEffect(
+      componentUpdateFn,
+      () => queueJob(update)
+    ));
 
     const update = (instance.update = () => effect.run());
     update.id = instance.uid;
@@ -242,6 +295,8 @@ function baseCreateRenderer({
     }
   };
 
+  // TODO
+  // eslint-disable-next-line
   const move = (vnode, container, anchor) => {
     const { el, shapeFlag } = vnode;
     if (shapeFlag & ShapeFlags.COMPONENT) {

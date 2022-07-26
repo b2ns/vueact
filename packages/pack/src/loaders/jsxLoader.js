@@ -10,7 +10,9 @@ export default ({ ast, changeExtension }) => {
       lastImportStatementIndex = i;
     }
   }
-  const restNodes = ast.splice(lastImportStatementIndex ? lastImportStatementIndex + 1 : 0);
+  const restNodes = ast.splice(
+    lastImportStatementIndex ? lastImportStatementIndex + 1 : 0
+  );
   if (restNodes.length) {
     const sourceCode = genCodeFromAST(restNodes);
     const code = compile(sourceCode);

@@ -41,7 +41,10 @@ function createHandlers() {
     get(target, key, receiver) {
       if (key === ReactiveFlags.IS_REACTIVE) {
         return true;
-      } else if (key === ReactiveFlags.RAW && receiver === reactiveMap.get(target)) {
+      } else if (
+        key === ReactiveFlags.RAW &&
+        receiver === reactiveMap.get(target)
+      ) {
         return target;
       }
 
@@ -60,7 +63,7 @@ function createHandlers() {
       return res;
     },
     set(target, key, value, receiver) {
-      let oldVal = Reflect.get(target, key);
+      const oldVal = Reflect.get(target, key);
 
       if (isRef(oldVal) && !isRef(value)) {
         oldVal.value = value;
@@ -70,7 +73,7 @@ function createHandlers() {
       const res = Reflect.set(target, key, value, receiver);
 
       if (hasChanged(oldVal, value)) {
-        trigger(target, key, value, oldVal);
+        trigger(target, key);
       }
 
       return res;
@@ -84,10 +87,11 @@ export function toRaw(observed) {
   return raw ? toRaw(raw) : observed;
 }
 
-export const toReactive = (value) => (isObject(value) ? reactive(value) : value);
+export const toReactive = (value) =>
+  isObject(value) ? reactive(value) : value;
 
 export function isReactive(value) {
-  return !!(value && value[ReactiveFlags.IS_REACTIVE]);
+  return Boolean(value && value[ReactiveFlags.IS_REACTIVE]);
 }
 
 export function isProxy(value) {
@@ -114,10 +118,12 @@ const targetMap = new WeakMap();
 
 export class ReactiveEffect {
   active = true;
-  deps = [];
-  parent = undefined;
 
-  computed = undefined;
+  deps = [];
+
+  parent = void 0;
+
+  computed = void 0;
   // allowRecurse = false;
 
   deferStop = false;
@@ -140,7 +146,7 @@ export class ReactiveEffect {
       parent = parent.parent;
     }
 
-    let lastShouldTrack = shouldTrack;
+    const lastShouldTrack = shouldTrack;
 
     try {
       this.parent = activeEffect;
@@ -151,7 +157,7 @@ export class ReactiveEffect {
     } finally {
       activeEffect = this.parent;
       shouldTrack = lastShouldTrack;
-      this.parent = undefined;
+      this.parent = void 0;
 
       if (this.deferStop) {
         this.stop();
@@ -204,7 +210,7 @@ export function enableTracking() {
 
 export function resetTracking() {
   const last = trackStack.pop();
-  shouldTrack = last === undefined ? true : last;
+  shouldTrack = last === void 0 ? true : last;
 }
 
 export function track(target, key) {
@@ -228,7 +234,7 @@ export function trackEffects(dep) {
   }
 }
 
-export function trigger(target, key, newVal, oldVal) {
+export function trigger(target, key) {
   const depsMap = targetMap.get(target);
   if (!depsMap) {
     return;
@@ -277,9 +283,11 @@ function createRef(rawValue) {
 
 class RefImpl {
   _value;
+
   _rawValue;
 
-  dep = undefined;
+  dep = void 0;
+
   __v_isRef = true;
 
   constructor(value) {
@@ -317,7 +325,7 @@ export function triggerRefValue(ref) {
 }
 
 export function isRef(r) {
-  return !!(r && r.__v_isRef === true);
+  return Boolean(r && r.__v_isRef === true);
 }
 
 export function unref(ref) {
@@ -348,7 +356,7 @@ class ObjectRefImpl {
 
   get value() {
     const val = this._object[this._key];
-    return val === undefined ? this._defaultValue : val;
+    return val === void 0 ? this._defaultValue : val;
   }
 
   set value(newVal) {
@@ -364,10 +372,12 @@ export function computed(getter) {
 }
 
 export class ComputedRefImpl {
-  dep = undefined;
+  dep = void 0;
+
   effect;
 
   _value;
+
   _dirty = true;
 
   __v_isRef = true;
@@ -420,7 +430,7 @@ function doWatch(source, cb, { immediate, flush } = {}) {
     }
     if (cb) {
       const newVal = effect.run();
-      cb(newVal, oldVal === INITIAL_WATCHER_VALUE ? undefined : oldVal);
+      cb(newVal, oldVal === INITIAL_WATCHER_VALUE ? void 0 : oldVal);
       oldVal = newVal;
     } else {
       effect.run();
