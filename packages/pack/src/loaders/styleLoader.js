@@ -1,20 +1,20 @@
 import { readFileSync } from 'fs';
 
-export default ({ absPath, parents, noWrite }) => {
-  noWrite();
+export default ({ id, parents, skipWrite, createASTNode }) => {
+  skipWrite();
 
   if (!parents.length) {
     return;
   }
 
-  const node = {
-    code: `
-(function () {
+  const node = createASTNode(
+    'inject-css',
+    `(function () {
   const el = document.createElement('style');
-  el.innerHTML = \`${readFileSync(absPath, { encoding: 'utf-8' })}\`;
+  el.innerHTML = \`${readFileSync(id, { encoding: 'utf-8' })}\`;
   document.head.appendChild(el);
-})();`,
-  };
+})();`
+  );
 
   for (const parent of parents) {
     const { ast } = parent;

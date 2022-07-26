@@ -1,6 +1,6 @@
 import { removeItem } from '../utils.js';
 
-export default ({ absPath, parents }) => {
+export default ({ id, parents }) => {
   if (!parents.length) {
     return;
   }
@@ -8,7 +8,7 @@ export default ({ absPath, parents }) => {
     const { ast } = parent;
     for (const node of ast) {
       if (node.type === 'import') {
-        if (node.absPath === absPath) {
+        if (node.absPath === id) {
           removeItem(ast, node);
         }
       }

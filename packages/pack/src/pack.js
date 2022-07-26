@@ -7,14 +7,16 @@ import {
 } from 'fs';
 import { dirname, extname, join, relative, resolve } from 'path';
 import {
+  createASTNode,
   debounce,
   ensureArray,
-  fixExtension,
   genCodeFromAST,
+  guessExtension,
+  isFunction,
   isPkg,
   isRelative,
   log,
-  normalizePathname,
+  normalizeExtension,
   recursiveWatch,
   removeItem,
   resolveModuleImport,
@@ -50,6 +52,7 @@ export default function pack(config = {}) {
 
   log('build done');
 
+  // TODO: cant not work now
   /*
    * watch
    */
@@ -97,10 +100,7 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
   const dependencis = doResolve(entry, null, '', projectRoot);
 
   function doResolve(absPath, parentModule, pkg, pkgRoot) {
-    const id = normalizePathname(
-      absPath,
-      resolveOpts && resolveOpts.extensions
-    );
+    const id = guessExtension(absPath, resolveOpts && resolveOpts.extensions);
 
     const cached = cachedMap.get(pkg || id);
     if (cached) {
@@ -166,14 +166,13 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
             }
           }
 
-          node.pathname = relativePath;
-          node.code = node.code.replace(rawPkg, relativePath);
+          node.setPathname(relativePath);
         }
 
         // ensure all extension change to '.js'
         // App -> App.js
         // App.jsx -> App.js
-        fixExtension(node);
+        normalizeExtension(node);
 
         mod.dependencis.push(doResolve(node.absPath, mod, rawPkg, _pkgRoot));
       }
@@ -195,12 +194,36 @@ function createModule(id) {
     pkg: '',
     parents: [],
     dependencis: [],
+    changeExtension(ext) {
+      if (!ext) {
+        return;
+      }
+      if (!ext.startsWith('.')) {
+        ext = `.${ext}`;
+      }
+      const currentExt = extname(mod.currentPath);
+      if (currentExt === ext) {
+        return;
+      }
+
+      mod.extensionChanged = true;
+      mod.currentPath = mod.currentPath.replace(currentExt, ext);
+    },
+    skipWrite() {
+      mod.noWrite = true;
+    },
   };
   return mod;
 }
 
 function resetModule(mod) {
-  Object.assign(mod, createModule(mod.id));
+  const initMod = createModule(mod.id);
+  for (const key in initMod) {
+    const val = initMod[key];
+    if (!isFunction(val)) {
+      mod[key] = val;
+    }
+  }
 }
 
 function removeModule(mod, cachedMap) {
@@ -250,11 +273,8 @@ function applyLoader(modules, loaders) {
           }
           fn(
             {
-              absPath: mod.id,
-              ast: mod.ast,
-              parents: mod.parents,
-              changeExtension: (ext) => changeExtension(mod, ext),
-              noWrite: () => noWrite(mod),
+              ...mod,
+              createASTNode,
             },
             opts
           );
@@ -270,26 +290,6 @@ function applyLoader(modules, loaders) {
       doApply([...extensionChangedModules.values()]);
     }
   }
-}
-
-function changeExtension(mod, ext) {
-  if (!ext) {
-    return;
-  }
-  if (!ext.startsWith('.')) {
-    ext = `.${ext}`;
-  }
-  const currentExt = extname(mod.currentPath);
-  if (currentExt === ext) {
-    return;
-  }
-
-  mod.extensionChanged = true;
-  mod.currentPath = mod.currentPath.replace(currentExt, ext);
-}
-
-function noWrite(mod) {
-  mod.noWrite = true;
 }
 
 /*
@@ -309,7 +309,7 @@ function writeContent(modules, output, projectRoot) {
 
     let { currentPath } = mod;
     // flatten the package in node_modules
-    // and put all package at the same directory: __pack__
+    // and put all package at the same directory
     if (currentPath.includes('node_modules')) {
       currentPath = currentPath.replace(
         /node_modules.+node_modules/g,
@@ -331,6 +331,7 @@ function writeContent(modules, output, projectRoot) {
   }
 }
 
+// TODO: naive implements now
 function runPlugins(plugins) {
   if (!plugins || !plugins.length) {
     return;

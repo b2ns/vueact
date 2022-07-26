@@ -1,8 +1,8 @@
 import { isRelative } from '@vueact/shared/src/node-utils.js';
 import { existsSync } from 'fs';
 import { extname, isAbsolute } from 'path';
-export * from '@vueact/shared/src/node-utils.js';
 export * from '@vueact/shared';
+export * from '@vueact/shared/src/node-utils.js';
 
 export const CommentTypes = {
   ONE_LINE: '/',
@@ -147,10 +147,7 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
 
   function stageOtherCode() {
     if (code) {
-      ast.push({
-        type: 'other',
-        rawCode: code,
-      });
+      ast.push(createASTNode('other', code));
       code = '';
     }
   }
@@ -163,10 +160,7 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
     if (isComment(char, nextChar)) {
       stageOtherCode();
       const [commentCode, nextIndex] = handleCommentCode(sourceCode, i);
-      ast.push({
-        type: 'comment',
-        code: commentCode,
-      });
+      ast.push(createASTNode('comment', commentCode));
       i = nextIndex;
       continue;
     }
@@ -184,14 +178,9 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
         sourceCode,
         i
       );
-      ast.push({
-        type: 'import',
-        rawCode,
-        rawPathname: pathname,
-        code: rawCode,
-        pathname,
-        absPath: pathname,
-      });
+
+      ast.push(createASTNode('import', rawCode, { pathname }));
+
       i = nextIndex;
       continue;
     }
@@ -208,17 +197,36 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
       if (node.type !== 'import') {
         continue;
       }
-      if (aliasRE.test(node.pathname)) {
-        node.absPath = node.pathname = node.pathname.replace(
-          aliasRE,
-          (m) => alias[m]
-        );
-        node.code = node.code.replace(node.rawPathname, node.pathname);
+      let { pathname } = node;
+      if (aliasRE.test(pathname)) {
+        pathname = node.absPath = pathname.replace(aliasRE, (m) => alias[m]);
+        node.setPathname(pathname);
       }
     }
   }
 
   return ast;
+}
+
+export function createASTNode(type, rawCode, extra = {}) {
+  const node = {
+    type,
+    rawCode,
+  };
+  if (type === 'import') {
+    const { pathname } = extra;
+    Object.assign(node, {
+      rawPathname: pathname,
+      code: rawCode,
+      pathname,
+      absPath: pathname,
+      setPathname(pathname) {
+        node.code = node.code.replace(node.pathname, pathname);
+        node.pathname = pathname;
+      },
+    });
+  }
+  return node;
 }
 
 export function getImportStatement(sourceCode, index) {
@@ -285,7 +293,7 @@ export const GUESS_EXTENSIONS = [
   'vue',
   'mjs',
 ];
-export function normalizePathname(pathname, extensions) {
+export function guessExtension(pathname, extensions) {
   const ext = extname(pathname);
 
   if (!ext) {
@@ -301,20 +309,20 @@ export function normalizePathname(pathname, extensions) {
   return pathname;
 }
 
-export function log(...args) {
-  // eslint-disable-next-line no-console
-  console.log(...args);
-}
-
-export function fixExtension(node) {
-  const { pathname, code } = node;
+export function normalizeExtension(node, defaultExtension = '.js') {
+  let { pathname } = node;
   const ext = extname(pathname);
   if (!ext) {
-    node.pathname = `${pathname}.js`;
+    pathname = `${pathname}${defaultExtension}`;
   } else if (['.jsx', '.ts', '.tsx', '.mjs'].includes(ext)) {
-    node.pathname = pathname.replace(ext, '.js');
+    pathname = pathname.replace(ext, defaultExtension);
   } else {
     return;
   }
-  node.code = code.replace(pathname, node.pathname);
+  node.setPathname(pathname);
+}
+
+export function log(...args) {
+  // eslint-disable-next-line no-console
+  console.log(...args);
 }
