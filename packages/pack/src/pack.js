@@ -56,9 +56,9 @@ export default function pack(config = {}) {
   if (watch) {
     log('watching ...');
 
-    for (const module of importedModules.values()) {
+    for (const mod of importedModules.values()) {
       // free some memory
-      resetModule(module);
+      resetModule(mod);
     }
 
     const handler = debounce((event, filename) => {
@@ -66,24 +66,24 @@ export default function pack(config = {}) {
         return;
       }
 
-      let module = importedModules.get(filename);
+      let mod = importedModules.get(filename);
 
-      if (!module) return;
+      if (!mod) return;
 
       log(`changing: ${filename}`);
 
-      removeModule(module, importedModules);
+      removeModule(mod, importedModules);
 
-      module = resolveDependencis(
-        module.id,
+      mod = resolveDependencis(
+        mod.id,
         projectRoot,
         importedModules,
         resolveOpts
       );
 
-      applyLoader(module, loaders);
+      applyLoader(mod, loaders);
 
-      writeContent(module, output, projectRoot);
+      writeContent(mod, output, projectRoot);
     });
 
     recursiveWatch(dirname(entry), handler);
@@ -108,16 +108,16 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
       return cached;
     }
 
-    const module = createModule(id);
-    cachedMap.set(pkg || id, module);
-    module.pkg = pkg ? pkg : parentModule && parentModule.pkg;
-    parentModule && module.parents.push(parentModule);
+    const mod = createModule(id);
+    cachedMap.set(pkg || id, mod);
+    mod.pkg = pkg ? pkg : parentModule && parentModule.pkg;
+    parentModule && mod.parents.push(parentModule);
 
-    if (shouldResolveModule(module.id)) {
+    if (shouldResolveModule(mod.id)) {
       const cwd = dirname(id);
       const sourceCode = readFileSync(id, { encoding: 'utf-8' });
       const ast = resolveModuleImport(sourceCode, resolveOpts);
-      module.ast = ast;
+      mod.ast = ast;
 
       for (const node of ast) {
         if (node.type !== 'import') {
@@ -161,7 +161,7 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
           if (cwd.includes('node_modules')) {
             // flaten the structure, put all node package at the top level
             relativePath = '../' + relativePath.replace(/node_modules\//g, '');
-            if (module.pkg.startsWith('@')) {
+            if (mod.pkg.startsWith('@')) {
               relativePath = '../' + relativePath;
             }
           }
@@ -175,20 +175,18 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
         // App.jsx -> App.js
         fixExtension(node);
 
-        module.dependencis.push(
-          doResolve(node.absPath, module, rawPkg, _pkgRoot)
-        );
+        mod.dependencis.push(doResolve(node.absPath, mod, rawPkg, _pkgRoot));
       }
     }
 
-    return module;
+    return mod;
   }
 
   return dependencis;
 }
 
 function createModule(id) {
-  const module = {
+  const mod = {
     id,
     extensionChanged: false,
     currentPath: id,
@@ -198,20 +196,20 @@ function createModule(id) {
     parents: [],
     dependencis: [],
   };
-  return module;
+  return mod;
 }
 
-function resetModule(module) {
-  Object.assign(module, createModule(module.id));
+function resetModule(mod) {
+  Object.assign(mod, createModule(mod.id));
 }
 
-function removeModule(module, cachedMap) {
-  cachedMap.delete(module.id);
-  for (const dep of module.dependencis) {
-    removeItem(dep.parents, module);
+function removeModule(mod, cachedMap) {
+  cachedMap.delete(mod.id);
+  for (const dep of mod.dependencis) {
+    removeItem(dep.parents, mod);
   }
-  for (const parent of module.parents) {
-    removeItem(parent.dependencis, module);
+  for (const parent of mod.parents) {
+    removeItem(parent.dependencis, mod);
   }
 }
 
@@ -230,15 +228,15 @@ function applyLoader(modules, loaders) {
   function doApply(modules) {
     const extensionChangedModules = new Set();
 
-    for (const module of modules) {
+    for (const mod of modules) {
       for (const loader of loaders) {
         if (
           !loader.test ||
-          !loader.test.test(module.currentPath) ||
+          !loader.test.test(mod.currentPath) ||
           !loader.use ||
           !loader.use.length ||
           (loader.exclude &&
-            loader.exclude.some((pattern) => pattern.test(module.currentPath)))
+            loader.exclude.some((pattern) => pattern.test(mod.currentPath)))
         ) {
           continue;
         }
@@ -252,18 +250,18 @@ function applyLoader(modules, loaders) {
           }
           fn(
             {
-              absPath: module.id,
-              ast: module.ast,
-              parents: module.parents,
-              changeExtension: (ext) => changeExtension(module, ext),
-              noWrite: () => noWrite(module),
+              absPath: mod.id,
+              ast: mod.ast,
+              parents: mod.parents,
+              changeExtension: (ext) => changeExtension(mod, ext),
+              noWrite: () => noWrite(mod),
             },
             opts
           );
         }
-        if (module.extensionChanged) {
-          extensionChangedModules.add(module);
-          module.extensionChanged = false;
+        if (mod.extensionChanged) {
+          extensionChangedModules.add(mod);
+          mod.extensionChanged = false;
         }
       }
     }
@@ -274,24 +272,24 @@ function applyLoader(modules, loaders) {
   }
 }
 
-function changeExtension(module, ext) {
+function changeExtension(mod, ext) {
   if (!ext) {
     return;
   }
   if (!ext.startsWith('.')) {
     ext = `.${ext}`;
   }
-  const currentExt = extname(module.currentPath);
+  const currentExt = extname(mod.currentPath);
   if (currentExt === ext) {
     return;
   }
 
-  module.extensionChanged = true;
-  module.currentPath = module.currentPath.replace(currentExt, ext);
+  mod.extensionChanged = true;
+  mod.currentPath = mod.currentPath.replace(currentExt, ext);
 }
 
-function noWrite(module) {
-  module.noWrite = true;
+function noWrite(mod) {
+  mod.noWrite = true;
 }
 
 /*
@@ -304,12 +302,12 @@ function writeContent(modules, output, projectRoot) {
     mkdirSync(output, { recursive: true });
   }
 
-  for (const module of modules) {
-    if (module.noWrite) {
+  for (const mod of modules) {
+    if (mod.noWrite) {
       continue;
     }
 
-    let { currentPath } = module;
+    let { currentPath } = mod;
     // flatten the package in node_modules
     // and put all package at the same directory: __pack__
     if (currentPath.includes('node_modules')) {
@@ -324,11 +322,11 @@ function writeContent(modules, output, projectRoot) {
       mkdirSync(dir, { recursive: true });
     }
 
-    if (module.ast) {
-      const code = genCodeFromAST(module.ast);
+    if (mod.ast) {
+      const code = genCodeFromAST(mod.ast);
       writeFileSync(dest, code, { encoding: 'utf-8' });
     } else {
-      copyFileSync(module.currentPath, dest);
+      copyFileSync(mod.currentPath, dest);
     }
   }
 }
