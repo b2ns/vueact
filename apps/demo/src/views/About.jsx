@@ -1,7 +1,7 @@
 import Hello from '../components/Hello';
 import { ref } from 'vueact';
 
-export default (props) => {
+export default () => {
   const name = ref('');
 
   return (h) => (

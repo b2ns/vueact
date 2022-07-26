@@ -6,7 +6,11 @@ module.exports = {
     commonjs: true,
     es2022: true,
   },
-  extends: ['eslint:recommended', 'plugin:react/recommended'],
+  extends: [
+    'eslint:recommended',
+    'plugin:react/recommended',
+    'plugin:react/jsx-runtime',
+  ],
   globals: {},
   parserOptions: {
     ecmaVersion: 'latest',
@@ -120,5 +124,15 @@ module.exports = {
     'template-curly-spacing': 'warn',
     'template-tag-spacing': 'warn',
     'yield-star-spacing': 'warn',
+
+    // React
+    'react/display-name': 0,
+    'react/no-unknown-property': 0,
+    'react/prop-types': 0,
+  },
+  settings: {
+    react: {
+      version: '18.2.0',
+    },
   },
 };
