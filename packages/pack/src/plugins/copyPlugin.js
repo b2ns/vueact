@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { ensureArray } from '../utils.js';
 
-export default (events, opts) => {
+export default ({ events }, opts) => {
   if (!opts) {
     return;
   }

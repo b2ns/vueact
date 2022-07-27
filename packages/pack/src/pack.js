@@ -47,7 +47,7 @@ export default function pack(config = {}) {
 
   applyPlugins(plugins, events);
 
-  events.emit('start', importedModules);
+  events.emit('start', injectHelper({ modules: importedModules }));
 
   const dependencis = resolveDependencis(
     entry,
@@ -61,7 +61,7 @@ export default function pack(config = {}) {
 
   writeContent([...importedModules.values()], output, projectRoot, events);
 
-  events.emit('end', dependencis, importedModules);
+  events.emit('start', injectHelper({ modules: importedModules, dependencis }));
 
   log('build done');
 
@@ -132,14 +132,14 @@ function resolveDependencis(
     mod.pkg = pkg ? pkg : parentModule && parentModule.pkg;
     parentModule && mod.parents.push(parentModule);
 
-    events.emit('moduleCreated', mod);
+    events.emit('moduleCreated', injectHelper({ module: mod }));
 
     if (shouldResolveModule(mod.id)) {
       const cwd = dirname(id);
       const sourceCode = readFileSync(id, { encoding: 'utf-8' });
       const ast = resolveModuleImport(sourceCode, resolveOpts);
       mod.ast = ast;
-      events.emit('beforeModuleResolve', mod);
+      events.emit('beforeModuleResolve', injectHelper({ module: mod }));
 
       for (const node of ast) {
         if (node.type !== 'import') {
@@ -199,7 +199,7 @@ function resolveDependencis(
         mod.dependencis.push(doResolve(node.absPath, mod, rawPkg, _pkgRoot));
       }
 
-      events.emit('moduleResolved', mod);
+      events.emit('moduleResolved', injectHelper({ module: mod }));
     }
 
     return mod;
@@ -260,6 +260,13 @@ function removeModule(mod, cachedMap) {
   }
 }
 
+function injectHelper(obj) {
+  return {
+    ...obj,
+    createASTNode,
+  };
+}
+
 /*
  * apply loader on each imported module
  */
@@ -295,14 +302,7 @@ function applyLoader(modules, loaders, events) {
             opts = fn[1];
             fn = fn[0];
           }
-          fn(
-            {
-              ...mod,
-              events,
-              createASTNode,
-            },
-            opts
-          );
+          fn(injectHelper({ module: mod, events }), opts);
         }
         if (mod.extensionChanged) {
           extensionChangedModules.add(mod);
@@ -328,7 +328,7 @@ function writeContent(modules, output, projectRoot, events) {
   }
 
   for (const mod of modules) {
-    events.emit('beforeModuleWrite', mod);
+    events.emit('beforeModuleWrite', injectHelper({ module: mod }));
 
     if (mod.noWrite) {
       continue;
@@ -356,7 +356,7 @@ function writeContent(modules, output, projectRoot, events) {
       copyFileSync(mod.currentPath, dest);
     }
 
-    events.emit('moduleWrited', mod);
+    events.emit('moduleWrited', injectHelper({ module: mod }));
   }
 }
 
@@ -371,6 +371,6 @@ function applyPlugins(plugins, events) {
       opts = plugin[1];
       plugin = plugin[0];
     }
-    plugin(events, opts);
+    plugin(injectHelper({ events }), opts);
   }
 }

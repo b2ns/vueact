@@ -1,7 +1,7 @@
 import { compile } from '../compileJSX.js';
 import { genCodeFromAST } from '../utils.js';
 
-export default ({ ast, changeExtension, createASTNode }) => {
+export default ({ module: { ast, changeExtension }, createASTNode }) => {
   changeExtension('js');
 
   let lastImportStatementIndex = 0;

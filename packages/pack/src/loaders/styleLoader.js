@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 
-export default ({ id, parents, skipWrite, createASTNode }) => {
+export default ({ module: { id, parents, skipWrite }, createASTNode }) => {
   skipWrite();
 
   if (!parents.length) {
