@@ -1,3 +1,4 @@
+import EventEmitter from 'events';
 import {
   copyFileSync,
   existsSync,
@@ -42,13 +43,25 @@ export default function pack(config = {}) {
 
   const importedModules = new Map();
 
-  resolveDependencis(entry, projectRoot, importedModules, resolveOpts);
+  const events = new EventEmitter();
 
-  applyLoader([...importedModules.values()], loaders);
+  applyPlugins(plugins, events);
 
-  writeContent([...importedModules.values()], output, projectRoot);
+  events.emit('start', importedModules);
 
-  runPlugins(plugins);
+  const dependencis = resolveDependencis(
+    entry,
+    projectRoot,
+    importedModules,
+    resolveOpts,
+    events
+  );
+
+  applyLoader([...importedModules.values()], loaders, events);
+
+  writeContent([...importedModules.values()], output, projectRoot, events);
+
+  events.emit('end', dependencis, importedModules);
 
   log('build done');
 
@@ -96,7 +109,13 @@ export default function pack(config = {}) {
 /*
  * resolve dependence graph
  */
-function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
+function resolveDependencis(
+  entry,
+  projectRoot,
+  cachedMap,
+  resolveOpts,
+  events
+) {
   const dependencis = doResolve(entry, null, '', projectRoot);
 
   function doResolve(absPath, parentModule, pkg, pkgRoot) {
@@ -113,11 +132,14 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
     mod.pkg = pkg ? pkg : parentModule && parentModule.pkg;
     parentModule && mod.parents.push(parentModule);
 
+    events.emit('moduleCreated', mod);
+
     if (shouldResolveModule(mod.id)) {
       const cwd = dirname(id);
       const sourceCode = readFileSync(id, { encoding: 'utf-8' });
       const ast = resolveModuleImport(sourceCode, resolveOpts);
       mod.ast = ast;
+      events.emit('beforeModuleResolve', mod);
 
       for (const node of ast) {
         if (node.type !== 'import') {
@@ -176,6 +198,8 @@ function resolveDependencis(entry, projectRoot, cachedMap, resolveOpts) {
 
         mod.dependencis.push(doResolve(node.absPath, mod, rawPkg, _pkgRoot));
       }
+
+      events.emit('moduleResolved', mod);
     }
 
     return mod;
@@ -239,7 +263,7 @@ function removeModule(mod, cachedMap) {
 /*
  * apply loader on each imported module
  */
-function applyLoader(modules, loaders) {
+function applyLoader(modules, loaders, events) {
   if (!loaders || !loaders.length) {
     return;
   }
@@ -274,6 +298,7 @@ function applyLoader(modules, loaders) {
           fn(
             {
               ...mod,
+              events,
               createASTNode,
             },
             opts
@@ -295,7 +320,7 @@ function applyLoader(modules, loaders) {
 /*
  * write to the disk
  */
-function writeContent(modules, output, projectRoot) {
+function writeContent(modules, output, projectRoot, events) {
   modules = ensureArray(modules);
 
   if (!existsSync(output)) {
@@ -303,6 +328,8 @@ function writeContent(modules, output, projectRoot) {
   }
 
   for (const mod of modules) {
+    events.emit('beforeModuleWrite', mod);
+
     if (mod.noWrite) {
       continue;
     }
@@ -328,11 +355,12 @@ function writeContent(modules, output, projectRoot) {
     } else {
       copyFileSync(mod.currentPath, dest);
     }
+
+    events.emit('moduleWrited', mod);
   }
 }
 
-// TODO: naive implements now
-function runPlugins(plugins) {
+function applyPlugins(plugins, events) {
   if (!plugins || !plugins.length) {
     return;
   }
@@ -343,6 +371,6 @@ function runPlugins(plugins) {
       opts = plugin[1];
       plugin = plugin[0];
     }
-    plugin(null, opts);
+    plugin(events, opts);
   }
 }
