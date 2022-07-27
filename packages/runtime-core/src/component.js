@@ -5,7 +5,6 @@ import {
   toRaw,
 } from '@vueact/reactivity';
 import { EMPTY_OBJ, hasOwn } from '@vueact/shared';
-import { h } from './vnode.js';
 
 let uid = 0;
 
@@ -74,7 +73,7 @@ export function setupComponent(instance) {
 }
 
 export function renderComponentRoot(instance) {
-  return instance.render(h);
+  return instance.render();
 }
 
 /*
