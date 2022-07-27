@@ -4,51 +4,6 @@ import { join } from 'path';
 export const isRelative = (pathname) =>
   pathname.startsWith('./') || pathname.startsWith('..');
 
-export const isNodeBuiltin = (pathname) =>
-  [
-    'assert',
-    'async_hooks',
-    'buffer',
-    'child_process',
-    'cluster',
-    'console',
-    'constants',
-    'crypto',
-    'dgram',
-    'diagnostics_channel',
-    'dns',
-    'domain',
-    'events',
-    'fs',
-    'http',
-    'http2',
-    'https',
-    'inspector',
-    'module',
-    'net',
-    'os',
-    'path',
-    'perf_hooks',
-    'process',
-    'punycode',
-    'querystring',
-    'readline',
-    'repl',
-    'stream',
-    'string_decoder',
-    'timers',
-    'tls',
-    'trace_events',
-    'tty',
-    'url',
-    'util',
-    'v8',
-    'vm',
-    'wasi',
-    'worker_threads',
-    'zlib',
-  ].includes(pathname);
-
 export function parseArgs(args) {
   const res = { files: [] };
   for (const arg of args) {
