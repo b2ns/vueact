@@ -297,7 +297,7 @@ function applyLoader(modules, loaders, events) {
 
         const use = [...loader.use].reverse();
         for (let fn of use) {
-          let opts = null;
+          let opts = void 0;
           if (Array.isArray(fn)) {
             opts = fn[1];
             fn = fn[0];
@@ -366,7 +366,7 @@ function applyPlugins(plugins, events) {
   }
 
   for (let plugin of plugins) {
-    let opts = null;
+    let opts = void 0;
     if (Array.isArray(plugin)) {
       opts = plugin[1];
       plugin = plugin[0];

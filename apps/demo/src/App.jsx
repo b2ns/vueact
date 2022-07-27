@@ -5,7 +5,7 @@ import './App.css';
 export default function App(props) {
   const footer = `<i>&copy; Copyright All Rights Reserved. ${new Date().getFullYear()}</i>`;
 
-  return (h) => (
+  return () => (
     <div class="app-box">
       <header>
         <h1>{props.name}</h1>

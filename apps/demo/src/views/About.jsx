@@ -4,7 +4,7 @@ import { ref } from 'vueact';
 export default () => {
   const name = ref('');
 
-  return (h) => (
+  return () => (
     <div class="main-page">
       <h3>about page</h3>
       <Hello name={name.value} />

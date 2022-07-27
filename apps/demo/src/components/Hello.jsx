@@ -1,4 +1,4 @@
-export default (props) => (h) =>
+export default (props) => () =>
   (
     <div class="hello-box">
       <p>
