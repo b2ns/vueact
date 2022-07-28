@@ -6,12 +6,14 @@ import {
   readFileSync,
   writeFileSync,
 } from 'fs';
+import { createRequire } from 'module';
 import { dirname, extname, join, relative, resolve } from 'path';
 import {
   createASTNode,
   debounce,
   ensureArray,
   genCodeFromAST,
+  getPkgInfo,
   guessExtension,
   isFunction,
   isPkg,
@@ -24,6 +26,11 @@ import {
   shouldResolveModule,
 } from './utils.js';
 
+const require = createRequire(import.meta.url);
+
+let projectRoot = '';
+const r = (p) => resolve(projectRoot, p);
+
 export default function pack(config = {}) {
   let {
     root = './',
@@ -35,8 +42,7 @@ export default function pack(config = {}) {
     watch,
   } = config;
 
-  const projectRoot = resolve(root);
-  const r = (p) => resolve(projectRoot, p);
+  projectRoot = resolve(root);
 
   entry = r(entry);
   output = r(output);
@@ -51,7 +57,6 @@ export default function pack(config = {}) {
 
   const dependencis = resolveDependencis(
     entry,
-    projectRoot,
     importedModules,
     resolveOpts,
     events
@@ -59,9 +64,9 @@ export default function pack(config = {}) {
 
   applyLoader([...importedModules.values()], loaders, events);
 
-  writeContent([...importedModules.values()], output, projectRoot, events);
+  writeContent([...importedModules.values()], output, events);
 
-  events.emit('start', injectHelper({ modules: importedModules, dependencis }));
+  events.emit('end', injectHelper({ modules: importedModules, dependencis }));
 
   log('build done');
 
@@ -90,16 +95,11 @@ export default function pack(config = {}) {
 
       removeModule(mod, importedModules);
 
-      mod = resolveDependencis(
-        mod.id,
-        projectRoot,
-        importedModules,
-        resolveOpts
-      );
+      mod = resolveDependencis(mod.id, importedModules, resolveOpts);
 
       applyLoader(mod, loaders);
 
-      writeContent(mod, output, projectRoot);
+      writeContent(mod, output);
     });
 
     recursiveWatch(dirname(entry), handler);
@@ -109,28 +109,30 @@ export default function pack(config = {}) {
 /*
  * resolve dependence graph
  */
-function resolveDependencis(
-  entry,
-  projectRoot,
-  cachedMap,
-  resolveOpts,
-  events
-) {
-  const dependencis = doResolve(entry, null, '', projectRoot);
+function resolveDependencis(entry, cachedMap, resolveOpts, events) {
+  const dependencis = doResolve(entry, null, null);
 
-  function doResolve(absPath, parentModule, pkg, pkgRoot) {
+  function doResolve(absPath, parentModule, pkgInfo) {
     const id = guessExtension(absPath, resolveOpts && resolveOpts.extensions);
 
-    const cached = cachedMap.get(pkg || id);
+    const cached = cachedMap.get(id);
     if (cached) {
       cached.parents.push(parentModule);
       return cached;
     }
 
     const mod = createModule(id);
-    cachedMap.set(pkg || id, mod);
-    mod.pkg = pkg ? pkg : parentModule && parentModule.pkg;
+
+    cachedMap.set(id, mod);
+
     parentModule && mod.parents.push(parentModule);
+
+    mod.pkgInfo = pkgInfo;
+    if (pkgInfo) {
+      mod.outpath = pkgInfo.__outpath__;
+    } else {
+      mod.outpath = relative(projectRoot, id);
+    }
 
     events.emit('moduleCreated', injectHelper({ module: mod }));
 
@@ -146,49 +148,46 @@ function resolveDependencis(
           continue;
         }
 
-        let rawPkg = '';
-        let _pkgRoot = pkgRoot;
+        let _pkgInfo = null;
 
         node.absPath = node.pathname;
 
         if (isRelative(node.pathname)) {
           node.absPath = join(cwd, node.pathname);
+          if (pkgInfo) {
+            _pkgInfo = { ...pkgInfo };
+            _pkgInfo.__outpath__ = join(
+              dirname(_pkgInfo.__outpath__),
+              node.pathname
+            );
+          }
         } else if (isPkg(node.pathname)) {
-          rawPkg = node.pathname;
+          node.absPath = require.resolve(node.pathname, {
+            paths: [cwd],
+          });
 
-          let pkgName = rawPkg;
-          // looking for index.js as main entry in package
-          let entry = 'index.js';
+          _pkgInfo = getPkgInfo(node.absPath);
 
-          // if starts with '@', means it's a scoped package
-          const isScoped = pkgName.startsWith('@');
-          const segments = pkgName.split('/');
-          const cuttingIndex = isScoped ? 2 : 1;
-
-          // import specific file
-          // e.g. import xxx from '@vueact/shared/src/xxx.js'
-          if (segments.length > cuttingIndex) {
-            pkgName = segments.slice(0, cuttingIndex).join('/');
-            entry = segments(cuttingIndex).join('/');
-          }
-
-          _pkgRoot = join(pkgRoot, 'node_modules', pkgName);
-          node.absPath = join(_pkgRoot, entry);
-
-          // change ast pathname and code
-          // vueact -> /relative/path/to/vueact/index.js
-          let relativePath = relative(cwd, node.absPath);
-
-          // nested package
-          if (cwd.includes('node_modules')) {
-            // flaten the structure, put all node package at the top level
-            relativePath = '../' + relativePath.replace(/node_modules\//g, '');
-            if (mod.pkg.startsWith('@')) {
+          let relativePath = relative(
+            cwd,
+            pkgInfo ? pkgInfo.__root__ : projectRoot
+          );
+          if (pkgInfo) {
+            relativePath = '../' + relativePath;
+            pkgInfo.name.split('/').forEach(() => {
               relativePath = '../' + relativePath;
-            }
+            });
           }
 
-          node.setPathname(relativePath);
+          const outpath = join(
+            '.pack',
+            `${_pkgInfo.name}@${_pkgInfo.version || ''}`,
+            `${_pkgInfo.main || 'index.js'}`
+          );
+
+          _pkgInfo.__outpath__ = outpath;
+
+          node.setPathname(join(relativePath, outpath));
         }
 
         // ensure all extension change to '.js'
@@ -196,7 +195,7 @@ function resolveDependencis(
         // App.jsx -> App.js
         normalizeExtension(node);
 
-        mod.dependencis.push(doResolve(node.absPath, mod, rawPkg, _pkgRoot));
+        mod.dependencis.push(doResolve(node.absPath, mod, _pkgInfo || pkgInfo));
       }
 
       events.emit('moduleResolved', injectHelper({ module: mod }));
@@ -213,9 +212,10 @@ function createModule(id) {
     id,
     extensionChanged: false,
     currentPath: id,
+    outpath: '',
     ast: null,
     noWrite: false,
-    pkg: '',
+    pkgInfo: null,
     parents: [],
     dependencis: [],
     changeExtension(ext) {
@@ -232,6 +232,7 @@ function createModule(id) {
 
       mod.extensionChanged = true;
       mod.currentPath = mod.currentPath.replace(currentExt, ext);
+      mod.outpath = mod.outpath.replace(currentExt, ext);
     },
     skipWrite() {
       mod.noWrite = true;
@@ -320,7 +321,7 @@ function applyLoader(modules, loaders, events) {
 /*
  * write to the disk
  */
-function writeContent(modules, output, projectRoot, events) {
+function writeContent(modules, output, events) {
   modules = ensureArray(modules);
 
   if (!existsSync(output)) {
@@ -334,16 +335,7 @@ function writeContent(modules, output, projectRoot, events) {
       continue;
     }
 
-    let { currentPath } = mod;
-    // flatten the package in node_modules
-    // and put all package at the same directory
-    if (currentPath.includes('node_modules')) {
-      currentPath = currentPath.replace(
-        /node_modules.+node_modules/g,
-        'node_modules'
-      );
-    }
-    const dest = join(output, relative(projectRoot, currentPath));
+    const dest = join(output, mod.outpath);
     const dir = dirname(dest);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });

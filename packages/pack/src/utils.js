@@ -1,8 +1,10 @@
 import { isRelative } from '@vueact/shared/src/node-utils.js';
 import { existsSync } from 'fs';
-import { extname, isAbsolute } from 'path';
+import { createRequire } from 'module';
+import { dirname, extname, isAbsolute, join } from 'path';
 export * from '@vueact/shared';
 export * from '@vueact/shared/src/node-utils.js';
+const require = createRequire(import.meta.url);
 
 export const CommentTypes = {
   ONE_LINE: '/',
@@ -282,6 +284,18 @@ export function shouldResolveModule(pathname) {
   return ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.vue'].includes(
     extname(pathname)
   );
+}
+
+export function getPkgInfo(pathname) {
+  while (pathname && pathname !== '/') {
+    const pkgjson = join(pathname, 'package.json');
+    if (existsSync(pkgjson)) {
+      const pkgInfo = require(pkgjson);
+      pkgInfo.__root__ = pathname;
+      return pkgInfo;
+    }
+    pathname = dirname(pathname);
+  }
 }
 
 export const GUESS_EXTENSIONS = [
