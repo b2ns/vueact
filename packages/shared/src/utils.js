@@ -87,3 +87,15 @@ export function ensureArray(val) {
   }
   return val == null ? val : [val];
 }
+
+export function getGlobalThis() {
+  return typeof globalThis !== 'undefined'
+    ? globalThis
+    : typeof self !== 'undefined'
+    ? self
+    : typeof window !== 'undefined'
+    ? window
+    : typeof global !== 'undefined'
+    ? global
+    : {};
+}

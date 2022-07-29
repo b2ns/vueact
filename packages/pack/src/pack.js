@@ -12,7 +12,9 @@ import {
   createASTNode,
   debounce,
   ensureArray,
+  extractEnv,
   genCodeFromAST,
+  getGlobalThis,
   getPkgInfo,
   guessExtension,
   isFunction,
@@ -63,6 +65,8 @@ export default function pack(config = {}) {
   );
 
   applyLoader([...importedModules.values()], loaders, events);
+
+  injectGlobalCode(dependencis, importedModules);
 
   writeContent([...importedModules.values()], output, events);
 
@@ -162,27 +166,44 @@ function resolveDependencis(entry, cachedMap, resolveOpts, events) {
             );
           }
         } else if (isPkg(node.pathname)) {
-          node.absPath = require.resolve(node.pathname, {
+          let pkgName = node.pathname;
+          let mainFile = '';
+          const isScoped = pkgName.startsWith('@');
+          const segments = pkgName.split('/');
+          const cuttingIndex = isScoped ? 2 : 1;
+          // import from subdirectory
+          // e.g. import xxx from '@vueact/shared/src/xxx.js'
+          if (segments.length > cuttingIndex) {
+            pkgName = segments.slice(0, cuttingIndex).join('/');
+            mainFile = segments.slice(cuttingIndex).join('/');
+          }
+
+          const resolvedPath = require.resolve(pkgName, {
             paths: [cwd],
           });
+          _pkgInfo = getPkgInfo(resolvedPath);
 
-          _pkgInfo = getPkgInfo(node.absPath);
+          if (!mainFile) {
+            // we use esmodule code by default
+            mainFile = _pkgInfo.module || _pkgInfo.main || 'index.js';
+          }
+          node.absPath = join(_pkgInfo.__root__, mainFile);
 
           let relativePath = relative(
             cwd,
             pkgInfo ? pkgInfo.__root__ : projectRoot
           );
           if (pkgInfo) {
-            relativePath = '../' + relativePath;
-            pkgInfo.name.split('/').forEach(() => {
+            relativePath = '../../' + relativePath;
+            if (pkgInfo.name.startsWith('@')) {
               relativePath = '../' + relativePath;
-            });
+            }
           }
 
           const outpath = join(
             '.pack',
             `${_pkgInfo.name}@${_pkgInfo.version || ''}`,
-            `${_pkgInfo.main || 'index.js'}`
+            `${mainFile}`
           );
 
           _pkgInfo.__outpath__ = outpath;
@@ -365,4 +386,29 @@ function applyPlugins(plugins, events) {
     }
     plugin(injectHelper({ events }), opts);
   }
+}
+
+function injectGlobalCode(root, cachedMap) {
+  const pathname = './___.pack_global___.js';
+  root.ast.unshift(
+    createASTNode('import', `import '${pathname}';\n`, { pathname })
+  );
+
+  const mod = createModule(pathname);
+  cachedMap.set(pathname, mod);
+  mod.parents.push(root);
+  root.dependencis.unshift(mod);
+  mod.outpath = join(dirname(root.outpath), pathname);
+
+  const env = JSON.stringify(extractEnv(['NODE_ENV']));
+  mod.ast = [
+    createASTNode(
+      'other',
+      `
+${getGlobalThis.toString()}
+const _global = getGlobalThis();
+_global.process = { env: JSON.parse('${env}')};
+`
+    ),
+  ];
 }

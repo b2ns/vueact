@@ -35,7 +35,8 @@ export function isImport(code, index) {
     code[index + 2] === 'p' &&
     code[index + 3] === 'o' &&
     code[index + 4] === 'r' &&
-    code[index + 5] === 't'
+    code[index + 5] === 't' &&
+    !/\w/.test(code[index + 6])
   ) {
     return true;
   }
@@ -46,7 +47,8 @@ export function isImport(code, index) {
     code[index + 2] === 'p' &&
     code[index + 3] === 'o' &&
     code[index + 4] === 'r' &&
-    code[index + 5] === 't'
+    code[index + 5] === 't' &&
+    !/\w/.test(code[index + 6])
   ) {
     let inCurly = false;
     let i = index + 6;
@@ -82,6 +84,18 @@ export function isImport(code, index) {
   }
 
   return false;
+}
+
+export function isExport(code, index) {
+  return (
+    code[index] === 'e' &&
+    code[index + 1] === 'x' &&
+    code[index + 2] === 'p' &&
+    code[index + 3] === 'o' &&
+    code[index + 4] === 'r' &&
+    code[index + 5] === 't' &&
+    !/\w/.test(code[index + 6])
+  );
 }
 
 // for browser there is no need to check node builtin module
@@ -154,6 +168,8 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
     }
   }
 
+  let isESM = false;
+
   let i = 0;
   while (i < sourceCode.length) {
     const char = sourceCode[i];
@@ -175,6 +191,7 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
     }
 
     if (isImport(sourceCode, i)) {
+      isESM = true;
       stageOtherCode();
       const [{ code: rawCode, pathname }, nextIndex] = getImportStatement(
         sourceCode,
@@ -185,6 +202,10 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
 
       i = nextIndex;
       continue;
+    }
+
+    if (isExport(sourceCode, i)) {
+      isESM = true;
     }
 
     code += char;
@@ -205,6 +226,21 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
         node.setPathname(pathname);
       }
     }
+  }
+
+  // inject helper to load umd or commonjs code
+  if (!isESM) {
+    const head = createASTNode(
+      'other',
+      `const module = { exports: {} };
+const exports = module.exports;
+const require = () => {};
+`
+    );
+    const tail = createASTNode('other', `export default module.exports;`);
+
+    ast.unshift(head);
+    ast.push(tail);
   }
 
   return ast;
@@ -339,4 +375,12 @@ export function normalizeExtension(node, defaultExtension = '.js') {
 export function log(...args) {
   // eslint-disable-next-line no-console
   console.log(...args);
+}
+
+export function extractEnv(envs) {
+  const env = {};
+  for (const e of envs) {
+    env[e] = process.env[e];
+  }
+  return env;
 }
