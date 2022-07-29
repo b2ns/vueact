@@ -393,5 +393,3 @@ export function ensurePathPrefix(pathname) {
   }
   return `./${pathname}`;
 }
-
-console.log(ensurePathPrefix('/abc.js'));

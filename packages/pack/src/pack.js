@@ -45,6 +45,7 @@ export default function pack(config = {}) {
     loaders,
     plugins,
     watch,
+    target = 'default', // default(web), node
   } = config;
 
   projectRoot = resolve(root);
@@ -60,12 +61,10 @@ export default function pack(config = {}) {
 
   events.emit('start', injectHelper({ modules: importedModules }));
 
-  const dependencis = resolveDependencis(
-    entry,
-    importedModules,
+  const dependencis = resolveDependencis(entry, importedModules, events, {
     resolveOpts,
-    events
-  );
+    target,
+  });
 
   applyLoader([...importedModules.values()], loaders, events);
 
@@ -116,7 +115,7 @@ export default function pack(config = {}) {
 /*
  * resolve dependence graph
  */
-function resolveDependencis(entry, cachedMap, resolveOpts, events) {
+function resolveDependencis(entry, cachedMap, events, { resolveOpts, target }) {
   const dependencis = doResolve(entry, null, null);
 
   function doResolve(absPath, parentModule, pkgInfo) {
@@ -165,7 +164,7 @@ function resolveDependencis(entry, cachedMap, resolveOpts, events) {
         if (isInnerImport && pkgInfo) {
           let filepath = pkgInfo.imports[node.pathname];
           if (isObject(filepath)) {
-            filepath = filepath.default;
+            filepath = filepath[target];
           }
           const pathname = ensurePathPrefix(
             relative(cwd, join(pkgInfo.__root__, filepath))
