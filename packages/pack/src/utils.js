@@ -259,7 +259,10 @@ export function createASTNode(type, rawCode, extra = {}) {
       pathname,
       absPath: pathname,
       setPathname(pathname) {
-        node.code = node.code.replace(node.pathname, pathname);
+        node.code = node.code.replace(
+          new RegExp(`(?<='|")${node.pathname}(?='|")`),
+          pathname
+        );
         node.pathname = pathname;
       },
     });
