@@ -2,8 +2,12 @@ import { readdirSync, statSync, watch } from 'fs';
 import { join } from 'path';
 import { builtinModules } from 'module';
 
-export const isBuiltin = (pathname) =>
-  builtinModules.includes(pathname.split(':')[1] || pathname);
+const builtinModuleSet = builtinModules.reduce((s, mod) => {
+  s.add(mod, true);
+  s.add(`node:${mod}`, true);
+  return s;
+}, new Set());
+export const isBuiltin = (pathname) => builtinModuleSet.has(pathname);
 
 export const isRelative = (pathname) =>
   pathname.startsWith('./') || pathname.startsWith('..');
