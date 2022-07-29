@@ -404,8 +404,7 @@ function injectGlobalCode(root, cachedMap) {
   mod.ast = [
     createASTNode(
       'other',
-      `
-${getGlobalThis.toString()}
+      `${getGlobalThis.toString()}
 const _global = getGlobalThis();
 _global.process = { env: JSON.parse('${env}')};
 `

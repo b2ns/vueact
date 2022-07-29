@@ -24,10 +24,9 @@ importers:
       '@vueact/shared': workspace:^1.0.0
       vueact: workspace:^1.0.0
     dependencies:
+      '@vueact/pack': link:../../packages/pack
       '@vueact/shared': link:../../packages/shared
       vueact: link:../../packages/vueact
-    devDependencies:
-      '@vueact/pack': link:../../packages/pack
 
   packages/pack:
     specifiers:

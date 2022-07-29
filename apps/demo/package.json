@@ -5,18 +5,16 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "node build/index.js --watch",
-    "build": "node build/index.js",
+    "dev": "pack --watch",
+    "build": "pack",
     "clear": "rm -rf dist"
   },
   "keywords": [],
   "author": "b2ns",
   "license": "MIT",
   "dependencies": {
+    "@vueact/pack": "workspace:^1.0.0",
     "@vueact/shared": "workspace:^1.0.0",
     "vueact": "workspace:^1.0.0"
-  },
-  "devDependencies": {
-    "@vueact/pack": "workspace:^1.0.0"
   }
 }
