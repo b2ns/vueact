@@ -1,5 +1,9 @@
 import { readdirSync, statSync, watch } from 'fs';
 import { join } from 'path';
+import { builtinModules } from 'module';
+
+export const isBuiltin = (pathname) =>
+  builtinModules.includes(pathname.split(':')[1] || pathname);
 
 export const isRelative = (pathname) =>
   pathname.startsWith('./') || pathname.startsWith('..');

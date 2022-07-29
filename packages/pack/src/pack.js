@@ -12,12 +12,15 @@ import {
   createASTNode,
   debounce,
   ensureArray,
+  ensurePathPrefix,
   extractEnv,
   genCodeFromAST,
   getGlobalThis,
   getPkgInfo,
   guessExtension,
+  isBuiltin,
   isFunction,
+  isObject,
   isPkg,
   isRelative,
   log,
@@ -148,13 +151,27 @@ function resolveDependencis(entry, cachedMap, resolveOpts, events) {
       events.emit('beforeModuleResolve', injectHelper({ module: mod }));
 
       for (const node of ast) {
-        if (node.type !== 'import') {
+        if (node.type !== 'import' || isBuiltin(node.pathname)) {
           continue;
         }
 
         let _pkgInfo = null;
 
         node.absPath = node.pathname;
+
+        // subpath import from owen package
+        // https://nodejs.org/api/packages.html#subpath-imports
+        const isInnerImport = node.pathname.startsWith('#');
+        if (isInnerImport && pkgInfo) {
+          let filepath = pkgInfo.imports[node.pathname];
+          if (isObject(filepath)) {
+            filepath = filepath.default;
+          }
+          const pathname = ensurePathPrefix(
+            relative(cwd, join(pkgInfo.__root__, filepath))
+          );
+          node.setPathname(pathname);
+        }
 
         if (isRelative(node.pathname)) {
           node.absPath = join(cwd, node.pathname);
@@ -171,7 +188,7 @@ function resolveDependencis(entry, cachedMap, resolveOpts, events) {
           const isScoped = pkgName.startsWith('@');
           const segments = pkgName.split('/');
           const cuttingIndex = isScoped ? 2 : 1;
-          // import from subdirectory
+          // import from subpath
           // e.g. import xxx from '@vueact/shared/src/xxx.js'
           if (segments.length > cuttingIndex) {
             pkgName = segments.slice(0, cuttingIndex).join('/');

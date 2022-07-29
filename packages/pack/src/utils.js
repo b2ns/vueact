@@ -1,4 +1,4 @@
-import { isRelative } from '@vueact/shared/src/node-utils.js';
+import { isBuiltin, isRelative } from '@vueact/shared/src/node-utils.js';
 import { existsSync } from 'fs';
 import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join } from 'path';
@@ -98,9 +98,8 @@ export function isExport(code, index) {
   );
 }
 
-// for browser there is no need to check node builtin module
 export const isPkg = (pathname) =>
-  !isAbsolute(pathname) && !isRelative(pathname);
+  !isAbsolute(pathname) && !isRelative(pathname) && !isBuiltin(pathname);
 
 export function handleCommentCode(sourceCode, index) {
   let code = '';
@@ -387,3 +386,12 @@ export function extractEnv(envs) {
   }
   return env;
 }
+
+export function ensurePathPrefix(pathname) {
+  if (/^\.{0,2}\//g.test(pathname)) {
+    return pathname;
+  }
+  return `./${pathname}`;
+}
+
+console.log(ensurePathPrefix('/abc.js'));
