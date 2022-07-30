@@ -17,7 +17,7 @@ import {
   genCodeFromAST,
   getGlobalThis,
   getPkgInfo,
-  guessExtension,
+  guessFile,
   isBuiltin,
   isFunction,
   isObject,
@@ -119,7 +119,7 @@ function resolveDependencis(entry, cachedMap, events, { resolveOpts, target }) {
   const dependencis = doResolve(entry, null, null);
 
   function doResolve(absPath, parentModule, pkgInfo) {
-    const id = guessExtension(absPath, resolveOpts && resolveOpts.extensions);
+    const id = guessFile(absPath, resolveOpts && resolveOpts.extensions);
 
     const cached = cachedMap.get(id);
     if (cached) {

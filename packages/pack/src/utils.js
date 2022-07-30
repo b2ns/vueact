@@ -1,5 +1,5 @@
 import { isBuiltin, isRelative } from '@vueact/shared/src/node-utils.js';
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join } from 'path';
 export * from '@vueact/shared';
@@ -507,7 +507,7 @@ export function genCodeFromAST(ast) {
 }
 
 export function shouldResolveModule(pathname) {
-  return ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.vue'].includes(
+  return ['.js', '.jsx', '.ts', '.tsx', '.vue', '.mjs', 'cjs'].includes(
     extname(pathname)
   );
 }
@@ -527,20 +527,25 @@ export function getPkgInfo(pathname) {
 export const GUESS_EXTENSIONS = [
   'js',
   'jsx',
-  'json',
   'ts',
   'tsx',
   'vue',
+  'json',
   'mjs',
+  'cjs',
 ];
-export function guessExtension(pathname, extensions) {
+export function guessFile(pathname, extensions) {
   const ext = extname(pathname);
 
   if (!ext) {
+    if (existsSync(pathname) && statSync(pathname).isDirectory()) {
+      pathname = join(pathname, 'index');
+    }
+    let _pathname = '';
     for (const ext of extensions || GUESS_EXTENSIONS) {
-      if (existsSync(`${pathname}.${ext}`)) {
-        pathname = `${pathname}.${ext}`;
-        return pathname;
+      _pathname = `${pathname}.${ext}`;
+      if (existsSync(_pathname)) {
+        return _pathname;
       }
     }
     throw new Error(`File ${pathname} not found.`);
