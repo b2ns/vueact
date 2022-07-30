@@ -1,4 +1,4 @@
-import { isBuiltin, isRelative } from '@vueact/shared/src/node-utils.js';
+import { isBuiltin } from '@vueact/shared/src/node-utils.js';
 import { existsSync, statSync } from 'fs';
 import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join } from 'path';
@@ -113,8 +113,11 @@ export function isTheWord(word, code, index) {
   return res;
 }
 
+export const isRelative = (pathname) =>
+  pathname === '.' || pathname.startsWith('./') || pathname.startsWith('..');
+
 export const isPkg = (pathname) =>
-  !isAbsolute(pathname) && !isRelative(pathname) && !isBuiltin(pathname);
+  !isAbsolute(pathname) && !isRelative(pathname);
 
 export function handleCommentCode(sourceCode, index) {
   let code = '';
@@ -226,17 +229,21 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
 
     if (isRequire(sourceCode, i)) {
       stageOtherCode();
-      const [{ code: varName, pathname }, nextIndex] = resolveCJSRequire(
+      const [{ code: rawCode, pathname }, nextIndex] = resolveCJSRequire(
         sourceCode,
         i
       );
+      let varName = rawCode;
 
       if (!require2Imports[pathname]) {
-        require2Imports.push(
-          createASTNode('import', `import ${varName} from '${pathname}';\n`, {
-            pathname,
-          })
-        );
+        if (!isBuiltin(pathname)) {
+          varName = `__pack_require2esm_${pathname.replace(/\W/g, '_')}__`;
+          require2Imports.push(
+            createASTNode('import', `import ${varName} from '${pathname}';\n`, {
+              pathname,
+            })
+          );
+        }
         require2Imports[pathname] = true;
       }
 
@@ -246,7 +253,7 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
       continue;
     }
 
-    if (isExports(sourceCode, i)) {
+    if (!isESM && isExports(sourceCode, i)) {
       stageOtherCode();
       const [{ code: rawCode, varName }, nextIndex] = resovleCJSExports(
         sourceCode,
@@ -391,6 +398,7 @@ export function getImportPathname(sourceCode, index) {
 
 export function resolveCJSRequire(sourceCode, index) {
   let pathname = '';
+  let code = '';
 
   let i = index;
   while (i < sourceCode.length) {
@@ -398,7 +406,8 @@ export function resolveCJSRequire(sourceCode, index) {
     const nextChar = sourceCode[i + 1];
 
     if (isComment(char, nextChar)) {
-      const [_, nextIndex] = handleCommentCode(sourceCode, i);
+      const [commentCode, nextIndex] = handleCommentCode(sourceCode, i);
+      code += commentCode;
       i = nextIndex;
       continue;
     }
@@ -406,19 +415,20 @@ export function resolveCJSRequire(sourceCode, index) {
     if (isQuote(char)) {
       const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
       pathname = quotedCode.slice(1, -1);
+      code += quotedCode;
       i = nextIndex;
       continue;
     }
 
     if (char === ')') {
+      code += char;
       i++;
       break;
     }
 
+    code += char;
     i++;
   }
-
-  const code = `__pack_require2esm_${pathname.replace(/\W/g, '_')}__`;
 
   return [{ code, pathname }, i];
 }
@@ -554,12 +564,24 @@ export function guessFile(pathname, extensions) {
   return pathname;
 }
 
-export function normalizeExtension(node, defaultExtension = '.js') {
+export function normalizeExtension(
+  node,
+  { defaultExtension = '.js', target = 'default' } = {}
+) {
   let { pathname } = node;
   const ext = extname(pathname);
+  const extensions = ['.jsx', '.ts', '.tsx'];
+  if (target === 'default') {
+    extensions.push(...['.mjs', '.cjs']);
+  }
+
   if (!ext) {
-    pathname = `${pathname}${defaultExtension}`;
-  } else if (['.jsx', '.ts', '.tsx', '.mjs'].includes(ext)) {
+    pathname = `${pathname}${
+      defaultExtension.startsWith('.')
+        ? defaultExtension
+        : '.' + defaultExtension
+    }`;
+  } else if (extensions.includes(ext)) {
     pathname = pathname.replace(ext, defaultExtension);
   } else {
     return;

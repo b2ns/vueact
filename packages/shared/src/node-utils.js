@@ -9,9 +9,6 @@ const builtinModuleSet = builtinModules.reduce((s, mod) => {
 }, new Set());
 export const isBuiltin = (pathname) => builtinModuleSet.has(pathname);
 
-export const isRelative = (pathname) =>
-  pathname.startsWith('./') || pathname.startsWith('..');
-
 export function parseArgs(args) {
   const res = { files: [] };
   for (const arg of args) {

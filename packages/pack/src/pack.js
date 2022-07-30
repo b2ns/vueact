@@ -116,10 +116,12 @@ export default function pack(config = {}) {
  * resolve dependence graph
  */
 function resolveDependencis(entry, cachedMap, events, { resolveOpts, target }) {
+  const extensions = resolveOpts && resolveOpts.extensions;
+
   const dependencis = doResolve(entry, null, null);
 
   function doResolve(absPath, parentModule, pkgInfo) {
-    const id = guessFile(absPath, resolveOpts && resolveOpts.extensions);
+    const id = absPath;
 
     const cached = cachedMap.get(id);
     if (cached) {
@@ -156,24 +158,33 @@ function resolveDependencis(entry, cachedMap, events, { resolveOpts, target }) {
 
         let _pkgInfo = null;
 
-        node.absPath = node.pathname;
-
-        // subpath import from owen package
-        // https://nodejs.org/api/packages.html#subpath-imports
-        const isInnerImport = node.pathname.startsWith('#');
-        if (isInnerImport && pkgInfo) {
-          let filepath = pkgInfo.imports[node.pathname];
-          if (isObject(filepath)) {
-            filepath = filepath[target];
+        let isInnerImport = false;
+        if ((isInnerImport = node.pathname.startsWith('#'))) {
+          // subpath import from owen package
+          // https://nodejs.org/api/packages.html#subpath-imports
+          if (isInnerImport && pkgInfo) {
+            let filepath = pkgInfo.imports[node.pathname];
+            if (isObject(filepath)) {
+              filepath = filepath[target];
+            }
+            const pathname = ensurePathPrefix(
+              relative(cwd, join(pkgInfo.__root__, filepath))
+            );
+            node.setPathname(pathname);
           }
-          const pathname = ensurePathPrefix(
-            relative(cwd, join(pkgInfo.__root__, filepath))
-          );
-          node.setPathname(pathname);
         }
+
+        node.absPath = node.pathname;
 
         if (isRelative(node.pathname)) {
           node.absPath = join(cwd, node.pathname);
+
+          const absPath = guessFile(node.absPath, extensions);
+          if (absPath !== node.absPath) {
+            node.absPath = absPath;
+            node.setPathname(ensurePathPrefix(relative(cwd, node.absPath)));
+          }
+
           if (pkgInfo) {
             _pkgInfo = { ...pkgInfo };
             _pkgInfo.__outpath__ = join(
@@ -193,17 +204,69 @@ function resolveDependencis(entry, cachedMap, events, { resolveOpts, target }) {
             pkgName = segments.slice(0, cuttingIndex).join('/');
             mainFile = segments.slice(cuttingIndex).join('/');
           }
+          // console.log('PATH:', node.pathname, pkgName, mainFile);
+          // console.log(node);
 
-          const resolvedPath = require.resolve(pkgName, {
-            paths: [cwd],
-          });
-          _pkgInfo = getPkgInfo(resolvedPath);
+          let resolvedPath = '';
+
+          const tryMainPath = () => {
+            resolvedPath = require.resolve(pkgName, {
+              paths: [cwd],
+            });
+
+            _pkgInfo = getPkgInfo(resolvedPath);
+
+            if (!mainFile) {
+              // subpath exports
+              // https://nodejs.org/api/packages.html#subpath-exports
+              const { exports: _exports } = _pkgInfo;
+
+              // we use esmodule code by default
+              mainFile =
+                _pkgInfo.module ||
+                (_exports && (_exports['.'] || _exports)) ||
+                _pkgInfo.main ||
+                'index.js';
+            }
+            node.absPath = join(_pkgInfo.__root__, mainFile);
+
+            const absPath = guessFile(node.absPath, extensions);
+            if (absPath !== node.absPath) {
+              node.absPath = absPath;
+              mainFile = ensurePathPrefix(
+                relative(_pkgInfo.__root__, node.absPath)
+              );
+            }
+          };
+
+          const trySubPath = () => {
+            // console.log('trysub', node.pathname);
+            resolvedPath = require.resolve(node.pathname, {
+              paths: [cwd],
+            });
+            _pkgInfo = getPkgInfo(resolvedPath);
+            mainFile = relative(_pkgInfo.__root__, resolvedPath);
+            node.absPath = resolvedPath;
+
+            const absPath = guessFile(node.absPath, extensions);
+            if (absPath !== node.absPath) {
+              node.absPath = absPath;
+              mainFile = ensurePathPrefix(
+                relative(_pkgInfo.__root__, node.absPath)
+              );
+            }
+          };
 
           if (!mainFile) {
-            // we use esmodule code by default
-            mainFile = _pkgInfo.module || _pkgInfo.main || 'index.js';
+            tryMainPath();
+          } else {
+            try {
+              trySubPath();
+            } catch (error) {
+              // console.log('dsp', error);
+              tryMainPath();
+            }
           }
-          node.absPath = join(_pkgInfo.__root__, mainFile);
 
           let relativePath = relative(
             cwd,

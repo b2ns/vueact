@@ -1,3 +1,4 @@
+import { escape } from '@vueact/shared';
 import { readFileSync } from 'fs';
 
 export default ({ module: { id, parents, skipWrite }, createASTNode }) => {
@@ -11,7 +12,7 @@ export default ({ module: { id, parents, skipWrite }, createASTNode }) => {
     'inject-css',
     `(function () {
   const el = document.createElement('style');
-  el.innerHTML = \`${readFileSync(id, { encoding: 'utf-8' })}\`;
+  el.innerHTML = \`${escape(readFileSync(id, { encoding: 'utf-8' }), '`\\')}\`;
   document.head.appendChild(el);
 })();`
   );
