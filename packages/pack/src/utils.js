@@ -29,27 +29,11 @@ export const isQuote = (char) =>
 export const isNewLine = (char) => /[\n\r]/.test(char);
 
 export function isImport(code, index) {
-  if (
-    code[index] === 'i' &&
-    code[index + 1] === 'm' &&
-    code[index + 2] === 'p' &&
-    code[index + 3] === 'o' &&
-    code[index + 4] === 'r' &&
-    code[index + 5] === 't' &&
-    !/\w/.test(code[index + 6])
-  ) {
+  if (isTheWord('import', code, index)) {
     return true;
   }
 
-  if (
-    code[index] === 'e' &&
-    code[index + 1] === 'x' &&
-    code[index + 2] === 'p' &&
-    code[index + 3] === 'o' &&
-    code[index + 4] === 'r' &&
-    code[index + 5] === 't' &&
-    !/\w/.test(code[index + 6])
-  ) {
+  if (isExport(code, index)) {
     let inCurly = false;
     let i = index + 6;
     while (i < code.length) {
@@ -87,15 +71,46 @@ export function isImport(code, index) {
 }
 
 export function isExport(code, index) {
-  return (
-    code[index] === 'e' &&
-    code[index + 1] === 'x' &&
-    code[index + 2] === 'p' &&
-    code[index + 3] === 'o' &&
-    code[index + 4] === 'r' &&
-    code[index + 5] === 't' &&
-    !/\w/.test(code[index + 6])
-  );
+  return isTheWord('export', code, index);
+}
+
+/* module.exports = Default
+ * module.exports.foo = foo
+ * exports.bar = bar
+ * exports['foo-bar'] = foobar
+ */
+export function isExports(code, index) {
+  return isTheWord('exports', code, index);
+}
+
+export function isRequire(code, index) {
+  if (isTheWord('require', code, index)) {
+    let i = index + 7;
+    while (i < code.length) {
+      const char = code[i];
+      if (char === '(') {
+        return true;
+      }
+      if (!/\s/.test(char)) {
+        return false;
+      }
+      i++;
+    }
+  }
+  return false;
+}
+
+export function isTheWord(word, code, index) {
+  let res = !/\w/.test(code[index - 1] || '');
+  if (!res) return res;
+  let i = 0;
+  for (; i < word.length; i++) {
+    const char = word[i];
+    res = res && char === code[index + i];
+    if (!res) return res;
+  }
+  res = res && !/\w/.test(code[index + i]);
+  return res;
 }
 
 export const isPkg = (pathname) =>
@@ -156,9 +171,11 @@ export function handleQuotedCode(sourceCode, index) {
 }
 
 export function resolveModuleImport(sourceCode, resolveOpts = {}) {
-  const { alias } = resolveOpts;
+  const { alias, imports } = resolveOpts;
   const ast = [];
   let code = '';
+  const require2Imports = [];
+  const moduleExportNames = [];
 
   function stageOtherCode() {
     if (code) {
@@ -192,7 +209,7 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
     if (isImport(sourceCode, i)) {
       isESM = true;
       stageOtherCode();
-      const [{ code: rawCode, pathname }, nextIndex] = getImportStatement(
+      const [{ code: rawCode, pathname }, nextIndex] = getImportPathname(
         sourceCode,
         i
       );
@@ -203,14 +220,66 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
       continue;
     }
 
-    if (isExport(sourceCode, i)) {
+    if (!isESM && isExport(sourceCode, i)) {
       isESM = true;
+    }
+
+    if (isRequire(sourceCode, i)) {
+      stageOtherCode();
+      const [{ code: varName, pathname }, nextIndex] = resolveCJSRequire(
+        sourceCode,
+        i
+      );
+
+      if (!require2Imports[pathname]) {
+        require2Imports.push(
+          createASTNode('import', `import ${varName} from '${pathname}';\n`, {
+            pathname,
+          })
+        );
+        require2Imports[pathname] = true;
+      }
+
+      ast.push(createASTNode('other', varName));
+
+      i = nextIndex;
+      continue;
+    }
+
+    if (isExports(sourceCode, i)) {
+      stageOtherCode();
+      const [{ code: rawCode, varName }, nextIndex] = resovleCJSExports(
+        sourceCode,
+        i
+      );
+
+      if (varName && !moduleExportNames[varName]) {
+        moduleExportNames.push(varName);
+        moduleExportNames[varName] = true;
+      }
+
+      ast.push(createASTNode('other', rawCode));
+
+      i = nextIndex;
+      continue;
     }
 
     code += char;
     i++;
   }
   stageOtherCode();
+
+  if (require2Imports.length) {
+    ast.unshift(...require2Imports);
+  }
+
+  if (moduleExportNames.length) {
+    let exportCode = '';
+    for (const varName of moduleExportNames) {
+      exportCode += `export const ${varName} = module.exports.${varName};\n`;
+    }
+    ast.push(createASTNode('other', exportCode));
+  }
 
   let aliasKeys = '';
   if (alias && (aliasKeys = Object.keys(alias).join('|'))) {
@@ -222,6 +291,20 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
       let { pathname } = node;
       if (aliasRE.test(pathname)) {
         pathname = node.absPath = pathname.replace(aliasRE, (m) => alias[m]);
+        node.setPathname(pathname);
+      }
+    }
+  }
+
+  if (imports && Object.keys(imports).length) {
+    for (const node of ast) {
+      if (node.type !== 'import') {
+        continue;
+      }
+      let { pathname } = node;
+      const newPathname = imports[pathname];
+      if (newPathname) {
+        pathname = node.absPath = newPathname;
         node.setPathname(pathname);
       }
     }
@@ -269,7 +352,7 @@ export function createASTNode(type, rawCode, extra = {}) {
   return node;
 }
 
-export function getImportStatement(sourceCode, index) {
+export function getImportPathname(sourceCode, index) {
   let code = '';
   let pathname = '';
 
@@ -304,6 +387,111 @@ export function getImportStatement(sourceCode, index) {
   }
 
   return [{ code, pathname }, i];
+}
+
+export function resolveCJSRequire(sourceCode, index) {
+  let pathname = '';
+
+  let i = index;
+  while (i < sourceCode.length) {
+    const char = sourceCode[i];
+    const nextChar = sourceCode[i + 1];
+
+    if (isComment(char, nextChar)) {
+      const [_, nextIndex] = handleCommentCode(sourceCode, i);
+      i = nextIndex;
+      continue;
+    }
+
+    if (isQuote(char)) {
+      const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
+      pathname = quotedCode.slice(1, -1);
+      i = nextIndex;
+      continue;
+    }
+
+    if (char === ')') {
+      i++;
+      break;
+    }
+
+    i++;
+  }
+
+  const code = `__pack_require2esm_${pathname.replace(/\W/g, '_')}__`;
+
+  return [{ code, pathname }, i];
+}
+
+export function resovleCJSExports(sourceCode, index) {
+  let varName = '';
+  let nameFlag = false;
+  let checking = false;
+  let code = '';
+
+  let i = index + 'exports'.length;
+  while (i < sourceCode.length) {
+    const char = sourceCode[i];
+    const nextChar = sourceCode[i + 1];
+
+    if (isComment(char, nextChar)) {
+      const [commentCode, nextIndex] = handleCommentCode(sourceCode, i);
+      code += commentCode;
+      i = nextIndex;
+      continue;
+    }
+
+    if (checking) {
+      code += char;
+      i++;
+      if (!/\s/.test(char) || char === '=') {
+        if (char !== '=') {
+          varName = '';
+        }
+        break;
+      }
+      continue;
+    }
+
+    if (nameFlag) {
+      code += char;
+      i++;
+      if (/\w/.test(char)) {
+        varName += char;
+      } else if (/\s/.test(char)) {
+        if (varName) {
+          nameFlag = false;
+          checking = true;
+        }
+      } else {
+        if (char !== '=') {
+          varName = '';
+        }
+        break;
+      }
+      continue;
+    }
+
+    if (char === '.') {
+      nameFlag = true;
+      code += char;
+      i++;
+      continue;
+    }
+
+    if (!/\s/.test(char)) {
+      code += char;
+      i++;
+      break;
+    }
+
+    code += char;
+    i++;
+  }
+
+  code = 'exports' + code;
+
+  return [{ code, varName }, i];
 }
 
 export function genCodeFromAST(ast) {
