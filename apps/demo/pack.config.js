@@ -9,7 +9,7 @@ import {
 } from '@vueact/pack';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const r = (p = './') => resolve(__dirname, '..', p);
+const r = (p = './') => resolve(__dirname, p);
 
 export default {
   root: r(),
@@ -17,7 +17,7 @@ export default {
   output: './dist',
   resolve: {
     alias: {
-      '#': './src',
+      // '#': './src',
     },
   },
   loaders: [

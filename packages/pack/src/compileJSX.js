@@ -6,7 +6,7 @@ import {
   isQuote,
 } from './utils.js';
 
-export function compile(sourceCode) {
+export function compile(sourceCode, opts) {
   let code = '';
   let i = 0;
   while (i < sourceCode.length) {
@@ -28,7 +28,7 @@ export function compile(sourceCode) {
     }
 
     if (isJSX(sourceCode, i)) {
-      const [jsxCode, nextIndex] = compileJSX(sourceCode, i);
+      const [jsxCode, nextIndex] = compileJSX(sourceCode, i, opts);
       code += jsxCode;
       i = nextIndex;
       continue;
@@ -47,7 +47,7 @@ const SpreadProps = Symbol('spread props');
 
 const MSG = 'JSX parse error';
 
-export function compileJSX(sourceCode, index) {
+export function compileJSX(sourceCode, index, opts) {
   let tagNameFlag = false;
   let tagName = '';
 
@@ -311,7 +311,7 @@ export function compileJSX(sourceCode, index) {
     textVal += char;
   }
 
-  return [genCode(ast), i];
+  return [genCode(ast, opts), i];
 }
 
 export function isJSX(sourceCode, i) {
@@ -350,7 +350,8 @@ export function isJSX(sourceCode, i) {
   return false;
 }
 
-function genCode(nodes) {
+function genCode(nodes, opts = {}) {
+  const { factoryName = 'h' } = opts;
   let code = '';
   for (const node of nodes) {
     let { type, props, children, value } = node;
@@ -366,8 +367,11 @@ function genCode(nodes) {
       // capitalized tag as custom component
       type = /^[A-Z]\w+/.test(type) ? type : `'${type}'`;
       props = props ? `{${props.slice(1)}}` : 'null';
-      const childCode = children && children.length ? genCode(children) : '';
-      code += `,h(${type},${props}${childCode ? ',' + childCode : ''})`;
+      const childCode =
+        children && children.length ? genCode(children, opts) : '';
+      code += `,${factoryName}(${type},${props}${
+        childCode ? ',' + childCode : ''
+      })`;
     }
   }
   // remvoe prefix ','
