@@ -26,19 +26,25 @@ export const isQuote = (char) =>
   char === QuoteTypes.DOUBLE ||
   char === QuoteTypes.BACK;
 
+export const isWord = (char) => /\w/.test(char);
+
+export const isBlank = (char) => /\s/.test(char);
+
 export const isNewLine = (char) => /[\n\r]/.test(char);
 
 export function isImport(code, index) {
   if (isTheWord('import', code, index)) {
     return true;
   }
+  return false;
+}
 
+export function isReExport(code, index) {
   if (isExport(code, index)) {
     let inCurly = false;
-    let i = index + 6;
+    let i = index + 'export'.length;
     while (i < code.length) {
       const char = code[i];
-      const nextChar = code[i + 1];
       if (inCurly) {
         if (char === '}') {
           inCurly = false;
@@ -51,22 +57,15 @@ export function isImport(code, index) {
         i++;
         continue;
       }
-      if (
-        (char === 'a' && nextChar === 's') ||
-        (char === 'f' &&
-          nextChar === 'r' &&
-          code[i + 2] === 'o' &&
-          code[i + 3] === 'm')
-      ) {
+      if (isTheWord('as', code, i) || isTheWord('from', code, i)) {
         return true;
       }
-      if (!/[*\s]/.test(char)) {
+      if (!isBlank(char) && char !== '*') {
         return false;
       }
       i++;
     }
   }
-
   return false;
 }
 
@@ -91,7 +90,7 @@ export function isRequire(code, index) {
       if (char === '(') {
         return true;
       }
-      if (!/\s/.test(char)) {
+      if (!isBlank(char)) {
         return false;
       }
       i++;
@@ -101,7 +100,7 @@ export function isRequire(code, index) {
 }
 
 export function isTheWord(word, code, index) {
-  let res = !/\w/.test(code[index - 1] || '');
+  let res = !isWord(code[index - 1] || '');
   if (!res) return res;
   let i = 0;
   for (; i < word.length; i++) {
@@ -109,7 +108,7 @@ export function isTheWord(word, code, index) {
     res = res && char === code[index + i];
     if (!res) return res;
   }
-  res = res && !/\w/.test(code[index + i]);
+  res = res && !isWord(code[index + i]);
   return res;
 }
 
@@ -174,6 +173,7 @@ export function handleQuotedCode(sourceCode, index) {
 }
 
 export function resolveModuleImport(sourceCode, resolveOpts = {}) {
+  let _isImport = false;
   const { alias, imports } = resolveOpts;
   const ast = [];
   let code = '';
@@ -209,15 +209,18 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
       continue;
     }
 
-    if (isImport(sourceCode, i)) {
+    if ((_isImport = isImport(sourceCode, i)) || isReExport(sourceCode, i)) {
       isESM = true;
       stageOtherCode();
-      const [{ code: rawCode, pathname }, nextIndex] = getImportPathname(
+      const [{ code: rawCode, pathname }, nextIndex] = resolveESImport(
         sourceCode,
-        i
+        i,
+        _isImport ? 'import' : 'export'
       );
 
-      ast.push(createASTNode('import', rawCode, { pathname }));
+      ast.push(
+        createASTNode('import', rawCode, { pathname, reExport: !_isImport })
+      );
 
       i = nextIndex;
       continue;
@@ -344,6 +347,7 @@ export function createASTNode(type, rawCode, extra = {}) {
     const { pathname } = extra;
     Object.assign(node, {
       rawPathname: pathname,
+      reExport: false,
       code: rawCode,
       pathname,
       absPath: pathname,
@@ -359,11 +363,21 @@ export function createASTNode(type, rawCode, extra = {}) {
   return node;
 }
 
-export function getImportPathname(sourceCode, index) {
-  let code = '';
+export function resolveESImport(sourceCode, index, keyword) {
+  let code = keyword;
   let pathname = '';
+  const imported = [];
 
-  let i = index;
+  let curlyStart = false;
+  let curlyEnd = true;
+
+  let nameFlag = true;
+  let nameVal = '';
+
+  let aliasFlag = false;
+  let aliasVal = '';
+
+  let i = index + keyword.length;
   while (i < sourceCode.length) {
     const char = sourceCode[i];
     const nextChar = sourceCode[i + 1];
@@ -377,9 +391,82 @@ export function getImportPathname(sourceCode, index) {
 
     if (isQuote(char)) {
       const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
-      pathname = quotedCode.slice(1, -1);
+      nameFlag = false;
+      if (curlyStart) {
+        imported.push({ name: quotedCode });
+      } else {
+        pathname = quotedCode.slice(1, -1);
+      }
       code += quotedCode;
       i = nextIndex;
+      continue;
+    }
+
+    if (char === '*') {
+      nameFlag = false;
+      imported.push({ importAll: true, name: '*' });
+      code += char;
+      i++;
+      continue;
+    }
+
+    if (char === '{') {
+      curlyStart = true;
+      curlyEnd = false;
+      code += char;
+      i++;
+      continue;
+    }
+
+    if (char === '}') {
+      curlyStart = false;
+      curlyEnd = true;
+      code += char;
+      i++;
+      continue;
+    }
+
+    if (isTheWord('as', sourceCode, i)) {
+      aliasFlag = true;
+      code += 'as';
+      i += 2;
+      continue;
+    }
+
+    if (aliasFlag) {
+      if (isWord(char)) {
+        aliasVal += char;
+      } else if (aliasVal) {
+        imported[imported.length - 1].alias = aliasVal;
+        aliasVal = '';
+        aliasFlag = false;
+      }
+
+      code += char;
+      i++;
+      continue;
+    }
+
+    if (nameFlag) {
+      if (isWord(char)) {
+        nameVal += char;
+      } else if (nameVal) {
+        const node = { name: nameVal };
+        if (!curlyStart || nameVal === 'default') {
+          node.default = true;
+        }
+        imported.push(node);
+        nameVal = '';
+        nameFlag = false;
+      }
+
+      code += char;
+      i++;
+      continue;
+    }
+
+    if (!curlyEnd && isWord(char)) {
+      nameFlag = true;
       continue;
     }
 
@@ -393,7 +480,7 @@ export function getImportPathname(sourceCode, index) {
     i++;
   }
 
-  return [{ code, pathname }, i];
+  return [{ code, imported, pathname }, i];
 }
 
 export function resolveCJSRequire(sourceCode, index) {
@@ -437,7 +524,7 @@ export function resovleCJSExports(sourceCode, index) {
   let varName = '';
   let nameFlag = false;
   let checking = false;
-  let code = '';
+  let code = 'exports';
 
   let i = index + 'exports'.length;
   while (i < sourceCode.length) {
@@ -454,7 +541,7 @@ export function resovleCJSExports(sourceCode, index) {
     if (checking) {
       code += char;
       i++;
-      if (!/\s/.test(char) || char === '=') {
+      if (!isBlank(char) || char === '=') {
         if (char !== '=') {
           varName = '';
         }
@@ -466,9 +553,9 @@ export function resovleCJSExports(sourceCode, index) {
     if (nameFlag) {
       code += char;
       i++;
-      if (/\w/.test(char)) {
+      if (isWord(char)) {
         varName += char;
-      } else if (/\s/.test(char)) {
+      } else if (isBlank(char)) {
         if (varName) {
           nameFlag = false;
           checking = true;
@@ -489,7 +576,7 @@ export function resovleCJSExports(sourceCode, index) {
       continue;
     }
 
-    if (!/\s/.test(char)) {
+    if (!isBlank(char)) {
       code += char;
       i++;
       break;
@@ -498,8 +585,6 @@ export function resovleCJSExports(sourceCode, index) {
     code += char;
     i++;
   }
-
-  code = 'exports' + code;
 
   return [{ code, varName }, i];
 }
