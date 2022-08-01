@@ -6,7 +6,7 @@ import {
   isQuote,
 } from './utils.js';
 
-export function compile(sourceCode, opts) {
+export function parse(sourceCode, opts) {
   let code = '';
   let i = 0;
   while (i < sourceCode.length) {
@@ -28,8 +28,8 @@ export function compile(sourceCode, opts) {
     }
 
     if (isJSX(sourceCode, i)) {
-      const [jsxCode, nextIndex] = compileJSX(sourceCode, i, opts);
-      code += jsxCode;
+      const [ast, nextIndex] = parseJSX(sourceCode, i);
+      code += genCode(ast, opts);
       i = nextIndex;
       continue;
     }
@@ -47,7 +47,7 @@ const SpreadProps = Symbol('spread props');
 
 const MSG = 'JSX parse error';
 
-export function compileJSX(sourceCode, index, opts) {
+export function parseJSX(sourceCode, index) {
   let tagNameFlag = false;
   let tagName = '';
 
@@ -229,7 +229,7 @@ export function compileJSX(sourceCode, index, opts) {
         dynamicVal += quotedCode;
         i = nextIndex - 1;
       } else if (isJSX(sourceCode, i)) {
-        const [jsxCode, nextIndex] = compileJSX(sourceCode, i);
+        const [jsxCode, nextIndex] = parseJSX(sourceCode, i);
         dynamicVal += jsxCode;
         i = nextIndex - 1;
       } else if (char === '}') {
@@ -311,7 +311,7 @@ export function compileJSX(sourceCode, index, opts) {
     textVal += char;
   }
 
-  return [genCode(ast, opts), i];
+  return [ast, i];
 }
 
 export function isJSX(sourceCode, i) {
@@ -350,7 +350,7 @@ export function isJSX(sourceCode, i) {
   return false;
 }
 
-function genCode(nodes, opts = {}) {
+export function genCode(nodes, opts = {}) {
   const { factoryName = 'h' } = opts;
   let code = '';
   for (const node of nodes) {

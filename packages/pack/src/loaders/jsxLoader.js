@@ -1,4 +1,4 @@
-import { compile } from '../compileJSX.js';
+import { parse } from '../jsxParser.js';
 import { genCodeFromAST } from '../utils.js';
 
 export default ({ module: { ast, changeExtension }, createASTNode }, opts) => {
@@ -17,7 +17,7 @@ export default ({ module: { ast, changeExtension }, createASTNode }, opts) => {
   );
   if (restNodes.length) {
     const sourceCode = genCodeFromAST(restNodes);
-    const code = compile(sourceCode, opts);
+    const code = parse(sourceCode, opts);
     ast.push(createASTNode('other', code));
   }
 };
