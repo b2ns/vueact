@@ -22,22 +22,31 @@ just for fun 🕹️
 - React
   - JSX
   - stateful functional component
-  - props.children (as slots in Vue)
+  - props.children (i.e., slots in Vue)
   - render props
-- no other dependencis
+- no dependencis
   - homemade JSX compiler (extend the React JSX)
   - homemade assets bundler 📦
 
 ## todo 🔨
 
-- [ ] inject `h` automatically
-- [ ] watchPostEffect
-- [ ] provide, inject
-- [ ] Fragment
-- [ ] custom directives
-- [ ] v-show, v-model
-- [ ] element ref
-- [ ] quick diff algorithem when children with keys
-- [ ] KeepAlive
-- [ ] Teleport (or Portal)
-- [ ] defineProps
+- vueact
+
+  - [ ] watchPostEffect
+  - [ ] provide, inject
+  - [ ] Fragment
+  - [ ] quick diff algorithem when children with keys
+  - [ ] v-show, v-model
+  - [ ] custom directives
+  - [ ] element ref
+  - [ ] KeepAlive
+  - [ ] Teleport (or Portal)
+  - [ ] defineProps
+
+- pack
+
+  - [x] inject renderFactory `h` automatically
+  - [ ] watch mode
+  - [ ] a javascript parser(e.g., [acorn](https://github.com/acornjs/acorn)) for more analyzing on source code
+  - [ ] tree-shaking
+  - [ ] hmr(i.e., hot module replacement)
