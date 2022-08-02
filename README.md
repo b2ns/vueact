@@ -24,9 +24,9 @@ just for fun 🕹️
   - stateful functional component
   - props.children (i.e., slots in Vue)
   - render props
-- no dependencis
-  - homemade JSX compiler (extend the React JSX)
-  - homemade assets bundler 📦
+- no dependencis, all tools homemade
+  - JSX parser (extend the React JSX)
+  - assets bundler (no bundling, use native ES modules in the browser) 📦
 
 ## todo 🔨
 
@@ -34,6 +34,7 @@ just for fun 🕹️
 
   - [ ] watchPostEffect
   - [ ] provide, inject
+  - [ ] inherit attrs
   - [ ] Fragment
   - [ ] quick diff algorithem when children with keys
   - [ ] v-show, v-model
@@ -43,10 +44,17 @@ just for fun 🕹️
   - [ ] Teleport (or Portal)
   - [ ] defineProps
 
+- router
+
+- state managing
+
+- fetch
+
 - pack
 
   - [x] inject renderFactory `h` automatically
   - [ ] watch mode
   - [ ] a javascript parser(e.g., [acorn](https://github.com/acornjs/acorn)) for more analyzing on source code
   - [ ] tree-shaking
+  - [ ] dev server
   - [ ] hmr(i.e., hot module replacement)
