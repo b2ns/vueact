@@ -204,8 +204,6 @@ function resolveDependencis(entry, cachedMap, events, { resolveOpts, target }) {
             pkgName = segments.slice(0, cuttingIndex).join('/');
             mainFile = segments.slice(cuttingIndex).join('/');
           }
-          // console.log('PATH:', node.pathname, pkgName, mainFile);
-          // console.log(node);
 
           let resolvedPath = '';
 
@@ -240,7 +238,6 @@ function resolveDependencis(entry, cachedMap, events, { resolveOpts, target }) {
           };
 
           const trySubPath = () => {
-            // console.log('trysub', node.pathname);
             resolvedPath = require.resolve(node.pathname, {
               paths: [cwd],
             });
@@ -263,7 +260,6 @@ function resolveDependencis(entry, cachedMap, events, { resolveOpts, target }) {
             try {
               trySubPath();
             } catch (error) {
-              // console.log('dsp', error);
               tryMainPath();
             }
           }
