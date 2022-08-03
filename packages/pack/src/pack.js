@@ -19,7 +19,6 @@ import {
   getPkgInfo,
   guessFile,
   isBuiltin,
-  isFunction,
   isObject,
   isPkg,
   isRelative,
@@ -76,37 +75,45 @@ export default function pack(config = {}) {
 
   log('build done');
 
-  // TODO: cant not work now
   /*
    * watch
    */
   if (watch) {
     log('watching ...');
+    const changedFiles = new Set();
+    const rePack = debounce(() => {
+      for (const filename of changedFiles) {
+        const mod = importedModules.get(filename);
 
-    for (const mod of importedModules.values()) {
-      // free some memory
-      resetModule(mod);
-    }
+        if (!mod) return;
 
-    const handler = debounce((event, filename) => {
+        log(`changing: ${filename}`);
+
+        removeModule(mod, importedModules);
+
+        const newMod = resolveDependencis(mod.id, importedModules, events, {
+          resolveOpts,
+          target,
+        });
+        for (const parent of mod.parents) {
+          parent.dependencis.push(newMod);
+        }
+
+        applyLoader(newMod, loaders, events);
+
+        writeContent(newMod, output, events);
+
+        changedFiles.delete(filename);
+      }
+    });
+
+    const handler = (event, filename) => {
       if (event !== 'change') {
         return;
       }
-
-      let mod = importedModules.get(filename);
-
-      if (!mod) return;
-
-      log(`changing: ${filename}`);
-
-      removeModule(mod, importedModules);
-
-      mod = resolveDependencis(mod.id, importedModules, resolveOpts);
-
-      applyLoader(mod, loaders);
-
-      writeContent(mod, output);
-    });
+      changedFiles.add(filename);
+      rePack();
+    };
 
     recursiveWatch(dirname(entry), handler);
   }
@@ -335,16 +342,6 @@ function createModule(id) {
     },
   };
   return mod;
-}
-
-function resetModule(mod) {
-  const initMod = createModule(mod.id);
-  for (const key in initMod) {
-    const val = initMod[key];
-    if (!isFunction(val)) {
-      mod[key] = val;
-    }
-  }
 }
 
 function removeModule(mod, cachedMap) {
