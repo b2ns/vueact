@@ -1,6 +1,11 @@
 import { readdirSync, statSync, watch } from 'fs';
+import os from 'os';
 import { join } from 'path';
 import { builtinModules } from 'module';
+
+export const isLinux = os.type() === 'Linux';
+export const isMac = os.type() === 'Darwin';
+export const isWin = os.type() === 'Windows_NT';
 
 const builtinModuleSet = builtinModules.reduce((s, mod) => {
   s.add(mod, true);
@@ -25,12 +30,19 @@ export function parseArgs(args) {
 }
 
 export function recursiveWatch(dir, handler) {
-  watch(dir, (event, filename) => handler(event, join(dir, filename)));
-  const dirs = readdirSync(dir);
-  for (let file of dirs) {
-    file = join(dir, file);
-    if (statSync(file).isDirectory()) {
-      recursiveWatch(file, handler);
+  // only linux need polyfill
+  if (isLinux) {
+    watch(dir, (event, filename) => handler(event, join(dir, filename)));
+    const dirs = readdirSync(dir);
+    for (let file of dirs) {
+      file = join(dir, file);
+      if (statSync(file).isDirectory()) {
+        recursiveWatch(file, handler);
+      }
     }
+  } else {
+    watch(dir, { recursive: true }, (event, filename) =>
+      handler(event, join(dir, filename))
+    );
   }
 }
