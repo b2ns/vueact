@@ -18,6 +18,7 @@ import {
   getGlobalThis,
   getPkgInfo,
   guessFile,
+  hash,
   isBuiltin,
   isObject,
   isPkg,
@@ -87,7 +88,7 @@ class Pack {
   /*
    * resolve dependence graph
    */
-  resolveDependencis(entry) {
+  resolveDependencis(entry, extra = {}) {
     if (!entry) {
       entry = this.entry;
     }
@@ -122,9 +123,11 @@ class Pack {
 
       if (shouldResolveModule(mod.id)) {
         const cwd = dirname(id);
-        const sourceCode = readFileSync(id, { encoding: 'utf-8' });
+        const sourceCode =
+          extra.content || readFileSync(id, { encoding: 'utf-8' });
         const ast = resolveModuleImport(sourceCode, resolveOpts);
         mod.ast = ast;
+        mod.hash = pkgInfo ? '' : extra.hash || hash(sourceCode);
         events.emit('beforeModuleResolve', injectHelper({ module: mod }));
 
         for (const node of ast) {
@@ -402,11 +405,20 @@ class Pack {
 
         if (!mod) return;
 
+        const content = readFileSync(filename, { encoding: 'utf-8' });
+        const newHash = hash(content);
+        if (mod.hash === newHash) {
+          return;
+        }
+
         log(`changing: ${filename}`);
 
         removeModule(mod, this.importedModules);
 
-        const newMod = this.resolveDependencis(mod.id);
+        const newMod = this.resolveDependencis(mod.id, {
+          content,
+          hash: newHash,
+        });
         // fix parents reference
         newMod.parents = mod.parents;
         for (const parent of mod.parents) {
@@ -470,6 +482,7 @@ function createModule(id) {
     ast: null,
     noWrite: false,
     pkgInfo: null,
+    hash: '',
     parents: [],
     dependencis: [],
     changeExtension(ext) {

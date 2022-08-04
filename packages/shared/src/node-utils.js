@@ -1,7 +1,8 @@
+import { createHash } from 'crypto';
 import { readdirSync, statSync, watch } from 'fs';
+import { builtinModules } from 'module';
 import os from 'os';
 import { join } from 'path';
-import { builtinModules } from 'module';
 
 export const isLinux = os.type() === 'Linux';
 export const isMac = os.type() === 'Darwin';
@@ -45,4 +46,8 @@ export function recursiveWatch(dir, handler) {
       handler(event, join(dir, filename))
     );
   }
+}
+
+export function hash(data, algorithm = 'md5') {
+  return createHash(algorithm).update(data).digest('hex');
 }
