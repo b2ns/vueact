@@ -32,11 +32,8 @@ import {
 
 const require = createRequire(import.meta.url);
 
-let projectRoot = '';
-const r = (p) => resolve(projectRoot, p);
-
-export default function pack(config = {}) {
-  let {
+class Pack {
+  constructor({
     root = './',
     entry = './src/main.js',
     output = './dist',
@@ -45,269 +42,423 @@ export default function pack(config = {}) {
     plugins,
     watch,
     target = 'default', // default(web), node
-  } = config;
+  }) {
+    this.root = resolve(root);
+    this.entry = resolve(this.root, entry);
+    this.output = resolve(this.root, output);
+    this.resolveOpts = resolveOpts;
+    this.loaders = loaders;
+    this.plugins = plugins;
+    this.watch = watch;
+    this.target = target;
 
-  projectRoot = resolve(root);
+    this.importedModules = new Map();
+    this.graph = null;
+    this.events = new EventEmitter();
+  }
 
-  entry = r(entry);
-  output = r(output);
+  static pack(config) {
+    new Pack(config).run();
+  }
 
-  const importedModules = new Map();
+  run() {
+    const { importedModules, graph } = this;
+    this.applyPlugins();
 
-  const events = new EventEmitter();
+    this.events.emit('start', injectHelper({ modules: importedModules }));
 
-  applyPlugins(plugins, events);
+    this.graph = this.resolveDependencis();
 
-  events.emit('start', injectHelper({ modules: importedModules }));
+    this.applyLoaders();
 
-  const dependencis = resolveDependencis(entry, importedModules, events, {
-    resolveOpts,
-    target,
-  });
+    this.injectGlobalCode();
 
-  applyLoader([...importedModules.values()], loaders, events);
+    this.writeContent();
 
-  injectGlobalCode(dependencis, importedModules);
+    this.events.emit('end', injectHelper({ modules: importedModules, graph }));
 
-  writeContent([...importedModules.values()], output, events);
+    log('build done');
 
-  events.emit('end', injectHelper({ modules: importedModules, dependencis }));
-
-  log('build done');
+    if (this.watch) {
+      this.doWatch();
+    }
+  }
 
   /*
-   * watch
+   * resolve dependence graph
    */
-  if (watch) {
+  resolveDependencis(entry) {
+    if (!entry) {
+      entry = this.entry;
+    }
+    const { importedModules, events, root, resolveOpts, target } = this;
+    const extensions = resolveOpts && resolveOpts.extensions;
+
+    const graph = doResolve(entry, null, null);
+
+    function doResolve(absPath, parentModule, pkgInfo) {
+      const id = absPath;
+
+      const cached = importedModules.get(id);
+      if (cached) {
+        cached.parents.push(parentModule);
+        return cached;
+      }
+
+      const mod = createModule(id);
+
+      importedModules.set(id, mod);
+
+      parentModule && mod.parents.push(parentModule);
+
+      mod.pkgInfo = pkgInfo;
+      if (pkgInfo) {
+        mod.outpath = pkgInfo.__outpath__;
+      } else {
+        mod.outpath = relative(root, id);
+      }
+
+      events.emit('moduleCreated', injectHelper({ module: mod }));
+
+      if (shouldResolveModule(mod.id)) {
+        const cwd = dirname(id);
+        const sourceCode = readFileSync(id, { encoding: 'utf-8' });
+        const ast = resolveModuleImport(sourceCode, resolveOpts);
+        mod.ast = ast;
+        events.emit('beforeModuleResolve', injectHelper({ module: mod }));
+
+        for (const node of ast) {
+          if (node.type !== 'import' || isBuiltin(node.pathname)) {
+            continue;
+          }
+
+          let _pkgInfo = null;
+
+          let isInnerImport = false;
+          if ((isInnerImport = node.pathname.startsWith('#'))) {
+            // subpath import from owen package
+            // https://nodejs.org/api/packages.html#subpath-imports
+            if (isInnerImport && pkgInfo) {
+              let filepath = pkgInfo.imports[node.pathname];
+              if (isObject(filepath)) {
+                filepath = filepath[target];
+              }
+              const pathname = ensurePathPrefix(
+                relative(cwd, join(pkgInfo.__root__, filepath))
+              );
+              node.setPathname(pathname);
+            }
+          }
+
+          node.absPath = node.pathname;
+
+          if (isRelative(node.pathname)) {
+            node.absPath = join(cwd, node.pathname);
+
+            const absPath = guessFile(node.absPath, extensions);
+            if (absPath !== node.absPath) {
+              node.absPath = absPath;
+              node.setPathname(ensurePathPrefix(relative(cwd, node.absPath)));
+            }
+
+            if (pkgInfo) {
+              _pkgInfo = { ...pkgInfo };
+              _pkgInfo.__outpath__ = join(
+                dirname(_pkgInfo.__outpath__),
+                node.pathname
+              );
+            }
+          } else if (isPkg(node.pathname)) {
+            let pkgName = node.pathname;
+            let mainFile = '';
+            const isScoped = pkgName.startsWith('@');
+            const segments = pkgName.split('/');
+            const cuttingIndex = isScoped ? 2 : 1;
+            // import from subpath
+            // e.g. import xxx from '@vueact/shared/src/xxx.js'
+            if (segments.length > cuttingIndex) {
+              pkgName = segments.slice(0, cuttingIndex).join('/');
+              mainFile = segments.slice(cuttingIndex).join('/');
+            }
+
+            let resolvedPath = '';
+
+            const tryMainPath = () => {
+              resolvedPath = require.resolve(pkgName, {
+                paths: [cwd],
+              });
+
+              _pkgInfo = getPkgInfo(resolvedPath);
+
+              if (!mainFile) {
+                // subpath exports
+                // https://nodejs.org/api/packages.html#subpath-exports
+                const { exports: _exports } = _pkgInfo;
+
+                // we use esmodule code by default
+                mainFile =
+                  _pkgInfo.module ||
+                  (_exports && (_exports['.'] || _exports)) ||
+                  _pkgInfo.main ||
+                  'index.js';
+              }
+              node.absPath = join(_pkgInfo.__root__, mainFile);
+
+              const absPath = guessFile(node.absPath, extensions);
+              if (absPath !== node.absPath) {
+                node.absPath = absPath;
+                mainFile = ensurePathPrefix(
+                  relative(_pkgInfo.__root__, node.absPath)
+                );
+              }
+            };
+
+            const trySubPath = () => {
+              resolvedPath = require.resolve(node.pathname, {
+                paths: [cwd],
+              });
+              _pkgInfo = getPkgInfo(resolvedPath);
+              mainFile = relative(_pkgInfo.__root__, resolvedPath);
+              node.absPath = resolvedPath;
+
+              const absPath = guessFile(node.absPath, extensions);
+              if (absPath !== node.absPath) {
+                node.absPath = absPath;
+                mainFile = ensurePathPrefix(
+                  relative(_pkgInfo.__root__, node.absPath)
+                );
+              }
+            };
+
+            if (!mainFile) {
+              tryMainPath();
+            } else {
+              try {
+                trySubPath();
+              } catch (error) {
+                tryMainPath();
+              }
+            }
+
+            let relativePath = relative(cwd, pkgInfo ? pkgInfo.__root__ : root);
+            if (pkgInfo) {
+              relativePath = '../../' + relativePath;
+              if (pkgInfo.name.startsWith('@')) {
+                relativePath = '../' + relativePath;
+              }
+            }
+
+            const outpath = join(
+              '.pack',
+              `${_pkgInfo.name}@${_pkgInfo.version || ''}`,
+              `${mainFile}`
+            );
+
+            _pkgInfo.__outpath__ = outpath;
+
+            node.setPathname(join(relativePath, outpath));
+          }
+
+          // ensure all extension change to '.js'
+          // App -> App.js
+          // App.jsx -> App.js
+          normalizeExtension(node);
+
+          mod.dependencis.push(
+            doResolve(node.absPath, mod, _pkgInfo || pkgInfo)
+          );
+        }
+
+        events.emit('moduleResolved', injectHelper({ module: mod }));
+      }
+
+      return mod;
+    }
+
+    return graph;
+  }
+
+  /*
+   * apply loader on each imported module
+   */
+  applyLoaders(modules) {
+    const { loaders, events } = this;
+    if (!loaders || !loaders.length) {
+      return;
+    }
+
+    if (!modules) {
+      modules = [...this.importedModules.values()];
+    }
+    modules = ensureArray(modules);
+
+    doApply(modules);
+
+    function doApply(modules) {
+      const extensionChangedModules = new Set();
+
+      for (const mod of modules) {
+        for (const loader of loaders) {
+          if (
+            !loader.test ||
+            !loader.test.test(mod.currentPath) ||
+            !loader.use ||
+            !loader.use.length ||
+            (loader.exclude &&
+              loader.exclude.some((pattern) => pattern.test(mod.currentPath)))
+          ) {
+            continue;
+          }
+
+          const use = [...loader.use].reverse();
+          for (let fn of use) {
+            let opts = void 0;
+            if (Array.isArray(fn)) {
+              opts = fn[1];
+              fn = fn[0];
+            }
+            fn(injectHelper({ module: mod, events }), opts);
+          }
+          if (mod.extensionChanged) {
+            extensionChangedModules.add(mod);
+            mod.extensionChanged = false;
+          }
+        }
+      }
+
+      if (extensionChangedModules.size) {
+        doApply([...extensionChangedModules.values()]);
+      }
+    }
+  }
+
+  /*
+   * register plugin hooks
+   */
+  applyPlugins() {
+    const { plugins, events } = this;
+    if (!plugins || !plugins.length) {
+      return;
+    }
+
+    for (let plugin of plugins) {
+      let opts = void 0;
+      if (Array.isArray(plugin)) {
+        opts = plugin[1];
+        plugin = plugin[0];
+      }
+      plugin(injectHelper({ events }), opts);
+    }
+  }
+
+  /*
+   * write to the disk
+   */
+  writeContent(modules) {
+    const { output, events } = this;
+    if (!modules) {
+      modules = [...this.importedModules.values()];
+    }
+    modules = ensureArray(modules);
+
+    if (!existsSync(output)) {
+      mkdirSync(output, { recursive: true });
+    }
+
+    for (const mod of modules) {
+      events.emit('beforeModuleWrite', injectHelper({ module: mod }));
+
+      if (mod.noWrite) {
+        continue;
+      }
+
+      const dest = join(output, mod.outpath);
+      const dir = dirname(dest);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+
+      if (mod.ast) {
+        const code = genCodeFromAST(mod.ast);
+        writeFileSync(dest, code, { encoding: 'utf-8' });
+      } else {
+        copyFileSync(mod.currentPath, dest);
+      }
+
+      events.emit('moduleWrited', injectHelper({ module: mod }));
+    }
+  }
+
+  /*
+   * watch the file change and repack
+   */
+  doWatch() {
     log('watching ...');
+
     const changedFiles = new Set();
-    const rePack = debounce(() => {
+    const repack = debounce(() => {
       for (const filename of changedFiles) {
-        const mod = importedModules.get(filename);
+        const mod = this.importedModules.get(filename);
 
         if (!mod) return;
 
         log(`changing: ${filename}`);
 
-        removeModule(mod, importedModules);
+        removeModule(mod, this.importedModules);
 
-        const newMod = resolveDependencis(mod.id, importedModules, events, {
-          resolveOpts,
-          target,
-        });
+        const newMod = this.resolveDependencis(mod.id);
+        // fix parents reference
+        newMod.parents = mod.parents;
         for (const parent of mod.parents) {
           parent.dependencis.push(newMod);
         }
 
-        applyLoader(newMod, loaders, events);
+        this.applyLoaders(newMod);
 
-        writeContent(newMod, output, events);
+        this.writeContent(newMod);
 
         changedFiles.delete(filename);
       }
     });
 
-    const handler = (event, filename) => {
+    recursiveWatch(dirname(this.entry), (event, filename) => {
       if (event !== 'change') {
         return;
       }
       changedFiles.add(filename);
-      rePack();
-    };
-
-    recursiveWatch(dirname(entry), handler);
-  }
-}
-
-/*
- * resolve dependence graph
- */
-function resolveDependencis(entry, cachedMap, events, { resolveOpts, target }) {
-  const extensions = resolveOpts && resolveOpts.extensions;
-
-  const dependencis = doResolve(entry, null, null);
-
-  function doResolve(absPath, parentModule, pkgInfo) {
-    const id = absPath;
-
-    const cached = cachedMap.get(id);
-    if (cached) {
-      cached.parents.push(parentModule);
-      return cached;
-    }
-
-    const mod = createModule(id);
-
-    cachedMap.set(id, mod);
-
-    parentModule && mod.parents.push(parentModule);
-
-    mod.pkgInfo = pkgInfo;
-    if (pkgInfo) {
-      mod.outpath = pkgInfo.__outpath__;
-    } else {
-      mod.outpath = relative(projectRoot, id);
-    }
-
-    events.emit('moduleCreated', injectHelper({ module: mod }));
-
-    if (shouldResolveModule(mod.id)) {
-      const cwd = dirname(id);
-      const sourceCode = readFileSync(id, { encoding: 'utf-8' });
-      const ast = resolveModuleImport(sourceCode, resolveOpts);
-      mod.ast = ast;
-      events.emit('beforeModuleResolve', injectHelper({ module: mod }));
-
-      for (const node of ast) {
-        if (node.type !== 'import' || isBuiltin(node.pathname)) {
-          continue;
-        }
-
-        let _pkgInfo = null;
-
-        let isInnerImport = false;
-        if ((isInnerImport = node.pathname.startsWith('#'))) {
-          // subpath import from owen package
-          // https://nodejs.org/api/packages.html#subpath-imports
-          if (isInnerImport && pkgInfo) {
-            let filepath = pkgInfo.imports[node.pathname];
-            if (isObject(filepath)) {
-              filepath = filepath[target];
-            }
-            const pathname = ensurePathPrefix(
-              relative(cwd, join(pkgInfo.__root__, filepath))
-            );
-            node.setPathname(pathname);
-          }
-        }
-
-        node.absPath = node.pathname;
-
-        if (isRelative(node.pathname)) {
-          node.absPath = join(cwd, node.pathname);
-
-          const absPath = guessFile(node.absPath, extensions);
-          if (absPath !== node.absPath) {
-            node.absPath = absPath;
-            node.setPathname(ensurePathPrefix(relative(cwd, node.absPath)));
-          }
-
-          if (pkgInfo) {
-            _pkgInfo = { ...pkgInfo };
-            _pkgInfo.__outpath__ = join(
-              dirname(_pkgInfo.__outpath__),
-              node.pathname
-            );
-          }
-        } else if (isPkg(node.pathname)) {
-          let pkgName = node.pathname;
-          let mainFile = '';
-          const isScoped = pkgName.startsWith('@');
-          const segments = pkgName.split('/');
-          const cuttingIndex = isScoped ? 2 : 1;
-          // import from subpath
-          // e.g. import xxx from '@vueact/shared/src/xxx.js'
-          if (segments.length > cuttingIndex) {
-            pkgName = segments.slice(0, cuttingIndex).join('/');
-            mainFile = segments.slice(cuttingIndex).join('/');
-          }
-
-          let resolvedPath = '';
-
-          const tryMainPath = () => {
-            resolvedPath = require.resolve(pkgName, {
-              paths: [cwd],
-            });
-
-            _pkgInfo = getPkgInfo(resolvedPath);
-
-            if (!mainFile) {
-              // subpath exports
-              // https://nodejs.org/api/packages.html#subpath-exports
-              const { exports: _exports } = _pkgInfo;
-
-              // we use esmodule code by default
-              mainFile =
-                _pkgInfo.module ||
-                (_exports && (_exports['.'] || _exports)) ||
-                _pkgInfo.main ||
-                'index.js';
-            }
-            node.absPath = join(_pkgInfo.__root__, mainFile);
-
-            const absPath = guessFile(node.absPath, extensions);
-            if (absPath !== node.absPath) {
-              node.absPath = absPath;
-              mainFile = ensurePathPrefix(
-                relative(_pkgInfo.__root__, node.absPath)
-              );
-            }
-          };
-
-          const trySubPath = () => {
-            resolvedPath = require.resolve(node.pathname, {
-              paths: [cwd],
-            });
-            _pkgInfo = getPkgInfo(resolvedPath);
-            mainFile = relative(_pkgInfo.__root__, resolvedPath);
-            node.absPath = resolvedPath;
-
-            const absPath = guessFile(node.absPath, extensions);
-            if (absPath !== node.absPath) {
-              node.absPath = absPath;
-              mainFile = ensurePathPrefix(
-                relative(_pkgInfo.__root__, node.absPath)
-              );
-            }
-          };
-
-          if (!mainFile) {
-            tryMainPath();
-          } else {
-            try {
-              trySubPath();
-            } catch (error) {
-              tryMainPath();
-            }
-          }
-
-          let relativePath = relative(
-            cwd,
-            pkgInfo ? pkgInfo.__root__ : projectRoot
-          );
-          if (pkgInfo) {
-            relativePath = '../../' + relativePath;
-            if (pkgInfo.name.startsWith('@')) {
-              relativePath = '../' + relativePath;
-            }
-          }
-
-          const outpath = join(
-            '.pack',
-            `${_pkgInfo.name}@${_pkgInfo.version || ''}`,
-            `${mainFile}`
-          );
-
-          _pkgInfo.__outpath__ = outpath;
-
-          node.setPathname(join(relativePath, outpath));
-        }
-
-        // ensure all extension change to '.js'
-        // App -> App.js
-        // App.jsx -> App.js
-        normalizeExtension(node);
-
-        mod.dependencis.push(doResolve(node.absPath, mod, _pkgInfo || pkgInfo));
-      }
-
-      events.emit('moduleResolved', injectHelper({ module: mod }));
-    }
-
-    return mod;
+      repack();
+    });
   }
 
-  return dependencis;
+  /*
+   * inject global runtime code
+   * e.g. process.env.NODE_ENV
+   */
+  injectGlobalCode() {
+    const { graph, importedModules } = this;
+
+    const pathname = './___.pack_global___.js';
+    graph.ast.unshift(
+      createASTNode('import', `import '${pathname}';\n`, { pathname })
+    );
+
+    const mod = createModule(pathname);
+    importedModules.set(pathname, mod);
+    mod.parents.push(graph);
+    graph.dependencis.unshift(mod);
+    mod.outpath = join(dirname(graph.outpath), pathname);
+
+    const env = JSON.stringify(extractEnv(['NODE_ENV']));
+    mod.ast = [
+      createASTNode(
+        'other',
+        `${getGlobalThis.toString()}
+const _global = getGlobalThis();
+_global.process = { env: JSON.parse('${env}')};
+`
+      ),
+    ];
+  }
 }
 
 function createModule(id) {
@@ -344,8 +495,8 @@ function createModule(id) {
   return mod;
 }
 
-function removeModule(mod, cachedMap) {
-  cachedMap.delete(mod.id);
+function removeModule(mod, importedModules) {
+  importedModules.delete(mod.id);
   for (const dep of mod.dependencis) {
     removeItem(dep.parents, mod);
   }
@@ -361,125 +512,4 @@ function injectHelper(obj) {
   };
 }
 
-/*
- * apply loader on each imported module
- */
-function applyLoader(modules, loaders, events) {
-  if (!loaders || !loaders.length) {
-    return;
-  }
-
-  modules = ensureArray(modules);
-
-  doApply(modules);
-
-  function doApply(modules) {
-    const extensionChangedModules = new Set();
-
-    for (const mod of modules) {
-      for (const loader of loaders) {
-        if (
-          !loader.test ||
-          !loader.test.test(mod.currentPath) ||
-          !loader.use ||
-          !loader.use.length ||
-          (loader.exclude &&
-            loader.exclude.some((pattern) => pattern.test(mod.currentPath)))
-        ) {
-          continue;
-        }
-
-        const use = [...loader.use].reverse();
-        for (let fn of use) {
-          let opts = void 0;
-          if (Array.isArray(fn)) {
-            opts = fn[1];
-            fn = fn[0];
-          }
-          fn(injectHelper({ module: mod, events }), opts);
-        }
-        if (mod.extensionChanged) {
-          extensionChangedModules.add(mod);
-          mod.extensionChanged = false;
-        }
-      }
-    }
-
-    if (extensionChangedModules.size) {
-      doApply([...extensionChangedModules.values()]);
-    }
-  }
-}
-
-/*
- * write to the disk
- */
-function writeContent(modules, output, events) {
-  modules = ensureArray(modules);
-
-  if (!existsSync(output)) {
-    mkdirSync(output, { recursive: true });
-  }
-
-  for (const mod of modules) {
-    events.emit('beforeModuleWrite', injectHelper({ module: mod }));
-
-    if (mod.noWrite) {
-      continue;
-    }
-
-    const dest = join(output, mod.outpath);
-    const dir = dirname(dest);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
-
-    if (mod.ast) {
-      const code = genCodeFromAST(mod.ast);
-      writeFileSync(dest, code, { encoding: 'utf-8' });
-    } else {
-      copyFileSync(mod.currentPath, dest);
-    }
-
-    events.emit('moduleWrited', injectHelper({ module: mod }));
-  }
-}
-
-function applyPlugins(plugins, events) {
-  if (!plugins || !plugins.length) {
-    return;
-  }
-
-  for (let plugin of plugins) {
-    let opts = void 0;
-    if (Array.isArray(plugin)) {
-      opts = plugin[1];
-      plugin = plugin[0];
-    }
-    plugin(injectHelper({ events }), opts);
-  }
-}
-
-function injectGlobalCode(root, cachedMap) {
-  const pathname = './___.pack_global___.js';
-  root.ast.unshift(
-    createASTNode('import', `import '${pathname}';\n`, { pathname })
-  );
-
-  const mod = createModule(pathname);
-  cachedMap.set(pathname, mod);
-  mod.parents.push(root);
-  root.dependencis.unshift(mod);
-  mod.outpath = join(dirname(root.outpath), pathname);
-
-  const env = JSON.stringify(extractEnv(['NODE_ENV']));
-  mod.ast = [
-    createASTNode(
-      'other',
-      `${getGlobalThis.toString()}
-const _global = getGlobalThis();
-_global.process = { env: JSON.parse('${env}')};
-`
-    ),
-  ];
-}
+export default (config) => Pack.pack(config);
