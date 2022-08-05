@@ -172,10 +172,8 @@ export function handleQuotedCode(sourceCode, index) {
   return [code, i];
 }
 
-let aliasCache = null;
-export function resolveModuleImport(sourceCode, resolveOpts = {}) {
+export function resolveModuleImport(sourceCode) {
   let _isImport = false;
-  const { alias } = resolveOpts;
   const ast = [];
   let code = '';
   const require2Imports = [];
@@ -290,50 +288,6 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
       exportCode += `export const ${varName} = module.exports.${varName};\n`;
     }
     ast.push(createASTNode('other', exportCode));
-  }
-
-  let aliasKeys = null;
-  if (aliasCache || (alias && (aliasKeys = Object.keys(alias)))) {
-    let fullMathRE = null;
-    let partMatchRE = null;
-    if (aliasCache) {
-      fullMathRE = aliasCache.fullMathRE;
-      partMatchRE = aliasCache.partMatchRE;
-    } else {
-      const fullMatchKeys = [];
-      const partMatchKeys = [];
-      for (const key of aliasKeys) {
-        if (key.endsWith('$')) {
-          fullMatchKeys.push(key.slice(0, -1));
-        } else {
-          partMatchKeys.push(key);
-        }
-      }
-      aliasCache = {};
-      aliasCache.fullMathRE = fullMathRE = fullMatchKeys.length
-        ? new RegExp(`^${fullMatchKeys.join('|')}$`)
-        : null;
-      aliasCache.partMatchRE = partMatchRE = partMatchKeys.length
-        ? new RegExp(`^${partMatchKeys.join('|')}`)
-        : null;
-    }
-
-    for (const node of ast) {
-      if (node.type !== 'import') {
-        continue;
-      }
-      let { pathname } = node;
-      if (fullMathRE && fullMathRE.test(pathname)) {
-        pathname = node.absPath = alias[pathname + '$'];
-        node.setPathname(pathname);
-      } else if (partMatchRE && partMatchRE.test(pathname)) {
-        pathname = node.absPath = pathname.replace(
-          partMatchRE,
-          (m) => alias[m]
-        );
-        node.setPathname(pathname);
-      }
-    }
   }
 
   // inject helper to load umd or commonjs code
@@ -708,4 +662,45 @@ export function ensurePathPrefix(pathname) {
     return pathname;
   }
   return `./${pathname}`;
+}
+
+let aliasCache = null;
+export function resolveAlias(alias, node) {
+  if (!alias) {
+    return;
+  }
+
+  let fullMathRE = null;
+  let partMatchRE = null;
+  if (aliasCache) {
+    fullMathRE = aliasCache.fullMathRE;
+    partMatchRE = aliasCache.partMatchRE;
+  } else {
+    const aliasKeys = Object.keys(alias);
+    const fullMatchKeys = [];
+    const partMatchKeys = [];
+    for (const key of aliasKeys) {
+      if (key.endsWith('$')) {
+        fullMatchKeys.push(key.slice(0, -1));
+      } else {
+        partMatchKeys.push(key);
+      }
+    }
+    aliasCache = {};
+    aliasCache.fullMathRE = fullMathRE = fullMatchKeys.length
+      ? new RegExp(`^${fullMatchKeys.join('|')}$`)
+      : null;
+    aliasCache.partMatchRE = partMatchRE = partMatchKeys.length
+      ? new RegExp(`^${partMatchKeys.join('|')}`)
+      : null;
+  }
+
+  let { pathname } = node;
+  if (fullMathRE && fullMathRE.test(pathname)) {
+    pathname = node.absPath = alias[pathname + '$'];
+    node.setPathname(pathname);
+  } else if (partMatchRE && partMatchRE.test(pathname)) {
+    pathname = node.absPath = pathname.replace(partMatchRE, (m) => alias[m]);
+    node.setPathname(pathname);
+  }
 }

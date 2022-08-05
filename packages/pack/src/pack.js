@@ -27,6 +27,7 @@ import {
   normalizeExtension,
   recursiveWatch,
   removeItem,
+  resolveAlias,
   resolveModuleImport,
   shouldResolveModule,
 } from './utils.js';
@@ -38,7 +39,7 @@ class Pack {
     root = './',
     entry = './src/main.js',
     output = './dist',
-    resolve: resolveOpts,
+    resolve: resolveOpts = {},
     loaders,
     plugins,
     watch,
@@ -93,7 +94,7 @@ class Pack {
       entry = this.entry;
     }
     const { importedModules, events, root, resolveOpts, target } = this;
-    const extensions = resolveOpts && resolveOpts.extensions;
+    const { extensions, alias } = resolveOpts;
 
     const graph = doResolve(entry, null, null);
 
@@ -125,13 +126,18 @@ class Pack {
         const cwd = dirname(id);
         const sourceCode =
           extra.content || readFileSync(id, { encoding: 'utf-8' });
-        const ast = resolveModuleImport(sourceCode, resolveOpts);
-        mod.ast = ast;
         mod.hash = pkgInfo ? '' : extra.hash || hash(sourceCode);
+
+        const ast = resolveModuleImport(sourceCode);
+        mod.ast = ast;
         events.emit('beforeModuleResolve', injectHelper({ module: mod }));
 
         for (const node of ast) {
-          if (node.type !== 'import' || isBuiltin(node.pathname)) {
+          if (node.type !== 'import') {
+            continue;
+          }
+          resolveAlias(alias, node);
+          if (isBuiltin(node.pathname)) {
             continue;
           }
 
