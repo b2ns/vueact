@@ -627,7 +627,7 @@ export function normalizeExtension(
   const ext = extname(pathname);
   const extensions = ['.jsx', '.ts', '.tsx'];
   if (target === 'default') {
-    extensions.push(...['.mjs', '.cjs']);
+    extensions.push(...['.mjs', '.cjs', '.json']);
   }
 
   if (!ext) {
