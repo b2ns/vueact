@@ -172,9 +172,10 @@ export function handleQuotedCode(sourceCode, index) {
   return [code, i];
 }
 
+let aliasCache = null;
 export function resolveModuleImport(sourceCode, resolveOpts = {}) {
   let _isImport = false;
-  const { alias, imports } = resolveOpts;
+  const { alias } = resolveOpts;
   const ast = [];
   let code = '';
   const require2Imports = [];
@@ -291,30 +292,45 @@ export function resolveModuleImport(sourceCode, resolveOpts = {}) {
     ast.push(createASTNode('other', exportCode));
   }
 
-  let aliasKeys = '';
-  if (alias && (aliasKeys = Object.keys(alias).join('|'))) {
-    const aliasRE = new RegExp(`^${aliasKeys}`);
-    for (const node of ast) {
-      if (node.type !== 'import') {
-        continue;
+  let aliasKeys = null;
+  if (aliasCache || (alias && (aliasKeys = Object.keys(alias)))) {
+    let fullMathRE = null;
+    let partMatchRE = null;
+    if (aliasCache) {
+      fullMathRE = aliasCache.fullMathRE;
+      partMatchRE = aliasCache.partMatchRE;
+    } else {
+      const fullMatchKeys = [];
+      const partMatchKeys = [];
+      for (const key of aliasKeys) {
+        if (key.endsWith('$')) {
+          fullMatchKeys.push(key.slice(0, -1));
+        } else {
+          partMatchKeys.push(key);
+        }
       }
-      let { pathname } = node;
-      if (aliasRE.test(pathname)) {
-        pathname = node.absPath = pathname.replace(aliasRE, (m) => alias[m]);
-        node.setPathname(pathname);
-      }
+      aliasCache = {};
+      aliasCache.fullMathRE = fullMathRE = fullMatchKeys.length
+        ? new RegExp(`^${fullMatchKeys.join('|')}$`)
+        : null;
+      aliasCache.partMatchRE = partMatchRE = partMatchKeys.length
+        ? new RegExp(`^${partMatchKeys.join('|')}`)
+        : null;
     }
-  }
 
-  if (imports && Object.keys(imports).length) {
     for (const node of ast) {
       if (node.type !== 'import') {
         continue;
       }
       let { pathname } = node;
-      const newPathname = imports[pathname];
-      if (newPathname) {
-        pathname = node.absPath = newPathname;
+      if (fullMathRE && fullMathRE.test(pathname)) {
+        pathname = node.absPath = alias[pathname + '$'];
+        node.setPathname(pathname);
+      } else if (partMatchRE && partMatchRE.test(pathname)) {
+        pathname = node.absPath = pathname.replace(
+          partMatchRE,
+          (m) => alias[m]
+        );
         node.setPathname(pathname);
       }
     }
