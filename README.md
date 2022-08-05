@@ -54,8 +54,8 @@ just for fun 🕹️
 
   - [x] inject renderFactory `h` automatically
   - [x] watch mode
-  - [ ] fix option: resolve
-  - [ ] option: define
+  - [x] fix option: resolve
+  - [x] option: define
   - [ ] jsonLoader
   - [ ] assetsLoader
   - [ ] htmlPlugin

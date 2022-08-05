@@ -44,6 +44,7 @@ class Pack {
     plugins,
     watch,
     target = 'default', // default(web), node
+    define = {},
   }) {
     this.root = resolve(root);
     this.entry = resolve(this.root, entry);
@@ -53,6 +54,7 @@ class Pack {
     this.plugins = plugins;
     this.watch = watch;
     this.target = target;
+    this.define = define;
 
     this.importedModules = new Map();
     this.graph = null;
@@ -468,7 +470,7 @@ class Pack {
     graph.dependencis.unshift(mod);
     mod.outpath = join(dirname(graph.outpath), pathname);
 
-    const env = JSON.stringify(extractEnv(['NODE_ENV']));
+    const env = JSON.stringify({ ...extractEnv(['NODE_ENV']), ...this.define });
     mod.ast = [
       createASTNode(
         'other',
