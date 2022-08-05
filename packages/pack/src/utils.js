@@ -211,14 +211,15 @@ export function resolveModuleImport(sourceCode) {
     if ((_isImport = isImport(sourceCode, i)) || isReExport(sourceCode, i)) {
       isESM = true;
       stageOtherCode();
-      const [{ code: rawCode, pathname }, nextIndex] = resolveESImport(
-        sourceCode,
-        i,
-        _isImport ? 'import' : 'export'
-      );
+      const [{ code: rawCode, pathname, imported }, nextIndex] =
+        resolveESImport(sourceCode, i, _isImport ? 'import' : 'export');
 
       ast.push(
-        createASTNode('import', rawCode, { pathname, reExport: !_isImport })
+        createASTNode('import', rawCode, {
+          pathname,
+          reExport: !_isImport,
+          imported,
+        })
       );
 
       i = nextIndex;
@@ -314,13 +315,14 @@ export function createASTNode(type, rawCode, extra = {}) {
     rawCode,
   };
   if (type === 'import') {
-    const { pathname } = extra;
+    const { pathname, imported } = extra;
     Object.assign(node, {
       rawPathname: pathname,
       reExport: false,
       code: rawCode,
       pathname,
       absPath: pathname,
+      imported,
       setPathname(pathname) {
         node.code = node.code.replace(
           new RegExp(`(?<='|")${node.pathname}(?='|")`),

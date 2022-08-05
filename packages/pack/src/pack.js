@@ -295,7 +295,7 @@ class Pack {
    * apply loader on each imported module
    */
   applyLoaders(modules) {
-    const { loaders, events } = this;
+    const { loaders, events, root } = this;
     if (!loaders || !loaders.length) {
       return;
     }
@@ -330,7 +330,7 @@ class Pack {
               opts = fn[1];
               fn = fn[0];
             }
-            fn(injectHelper({ mod, events }), opts);
+            fn(injectHelper({ mod, events, root }), opts);
           }
           if (mod.extensionChanged) {
             extensionChangedModules.add(mod);

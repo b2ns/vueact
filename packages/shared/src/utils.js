@@ -74,10 +74,10 @@ export const debounce = (fn, wait = 300) => {
   };
 };
 
-export function removeItem(arr, item) {
+export function removeItem(arr, item, replaceItem) {
   const index = arr.indexOf(item);
   if (index >= 0) {
-    arr.splice(index, 1);
+    replaceItem ? arr.splice(index, 1, replaceItem) : arr.splice(index, 1);
   }
 }
 
