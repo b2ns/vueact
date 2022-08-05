@@ -53,7 +53,13 @@ just for fun 🕹️
 - pack
 
   - [x] inject renderFactory `h` automatically
-  - [ ] watch mode
+  - [x] watch mode
+  - [ ] fix option: resolve
+  - [ ] option: define
+  - [ ] jsonLoader
+  - [ ] assetsLoader
+  - [ ] htmlPlugin
+  - [ ] cssExtractPlugin
   - [ ] a javascript parser(e.g., [acorn](https://github.com/acornjs/acorn)) for more analyzing on source code
   - [ ] tree-shaking
   - [ ] dev server
