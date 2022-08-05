@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from 'fs';
 import { createRequire } from 'module';
-import { dirname, extname, join, relative, resolve } from 'path';
+import { dirname, extname, isAbsolute, join, relative, resolve } from 'path';
 import {
   createASTNode,
   debounce,
@@ -121,7 +121,7 @@ class Pack {
 
       events.emit('moduleCreated', injectHelper({ module: mod }));
 
-      if (shouldResolveModule(mod.id)) {
+      if (shouldResolveModule(id)) {
         const cwd = dirname(id);
         const sourceCode =
           extra.content || readFileSync(id, { encoding: 'utf-8' });
@@ -155,8 +155,10 @@ class Pack {
 
           node.absPath = node.pathname;
 
-          if (isRelative(node.pathname)) {
-            node.absPath = join(cwd, node.pathname);
+          if (isRelative(node.pathname) || isAbsolute(node.pathname)) {
+            if (!isAbsolute(node.pathname)) {
+              node.absPath = join(cwd, node.pathname);
+            }
 
             const absPath = guessFile(node.absPath, extensions);
             if (absPath !== node.absPath) {
