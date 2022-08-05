@@ -4,7 +4,7 @@ export default (
   { events, createASTNode },
   { factoryName = 'h', libName = 'vueact' } = {}
 ) => {
-  events.on('beforeModuleResolve', ({ module: { id, ast } }) => {
+  events.on('beforeModuleResolve', ({ mod: { id, ast } }) => {
     if (extname(id) !== '.jsx') {
       return;
     }

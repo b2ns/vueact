@@ -1,7 +1,7 @@
 import { escape } from '@vueact/shared';
 import { readFileSync } from 'fs';
 
-export default ({ module: { id, parents, skipWrite }, createASTNode }) => {
+export default ({ mod: { id, parents, skipWrite }, createASTNode }) => {
   skipWrite();
 
   if (!parents.length) {

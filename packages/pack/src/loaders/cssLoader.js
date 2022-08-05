@@ -1,6 +1,6 @@
 import { removeItem } from '../utils.js';
 
-export default ({ module: { id, parents } }) => {
+export default ({ mod: { id, parents } }) => {
   if (!parents.length) {
     return;
   }

@@ -122,7 +122,7 @@ class Pack {
         mod.outpath = relative(root, id);
       }
 
-      events.emit('moduleCreated', injectHelper({ module: mod }));
+      events.emit('moduleCreated', injectHelper({ mod }));
 
       if (shouldResolveModule(id)) {
         const cwd = dirname(id);
@@ -132,7 +132,7 @@ class Pack {
 
         const ast = resolveModuleImport(sourceCode);
         mod.ast = ast;
-        events.emit('beforeModuleResolve', injectHelper({ module: mod }));
+        events.emit('beforeModuleResolve', injectHelper({ mod }));
 
         for (const node of ast) {
           if (node.type !== 'import') {
@@ -282,7 +282,7 @@ class Pack {
           );
         }
 
-        events.emit('moduleResolved', injectHelper({ module: mod }));
+        events.emit('moduleResolved', injectHelper({ mod }));
       }
 
       return mod;
@@ -330,7 +330,7 @@ class Pack {
               opts = fn[1];
               fn = fn[0];
             }
-            fn(injectHelper({ module: mod, events }), opts);
+            fn(injectHelper({ mod, events }), opts);
           }
           if (mod.extensionChanged) {
             extensionChangedModules.add(mod);
@@ -379,7 +379,7 @@ class Pack {
     }
 
     for (const mod of modules) {
-      events.emit('beforeModuleWrite', injectHelper({ module: mod }));
+      events.emit('beforeModuleWrite', injectHelper({ mod }));
 
       if (mod.noWrite) {
         continue;
@@ -398,7 +398,7 @@ class Pack {
         copyFileSync(mod.currentPath, dest);
       }
 
-      events.emit('moduleWrited', injectHelper({ module: mod }));
+      events.emit('moduleWrited', injectHelper({ mod }));
     }
   }
 
