@@ -2,6 +2,7 @@ import { escape } from '@vueact/shared';
 import { readFileSync } from 'fs';
 
 export default ({ mod, createASTNode }) => {
+  mod.type = 'inject-style';
   mod.skipWrite();
 
   if (!mod.parents.length) {
@@ -9,7 +10,7 @@ export default ({ mod, createASTNode }) => {
   }
 
   const node = createASTNode(
-    'inject-css',
+    `inject-style`,
     `(function () {
   const el = document.createElement('style');
   el.innerHTML = \`${escape(
@@ -22,6 +23,15 @@ export default ({ mod, createASTNode }) => {
 
   for (const parent of mod.parents) {
     const { ast } = parent;
-    ast.push(node);
+    if (!parent.__injectedStyle__) {
+      parent.__injectedStyle__ = new WeakMap();
+    }
+    const oldNode = parent.__injectedStyle__.get(mod);
+    if (oldNode) {
+      oldNode.rawCode = node.rawCode;
+    } else {
+      ast.push(node);
+      parent.__injectedStyle__.set(mod, node);
+    }
   }
 };

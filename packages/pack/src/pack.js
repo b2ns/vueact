@@ -92,45 +92,52 @@ class Pack {
   /*
    * resolve dependence graph
    */
-  resolveDependencis(entry, extra = {}) {
-    if (!entry) {
-      entry = this.entry;
-    }
+  resolveDependencis(entry = this.entry, extra = {}) {
     const that = this;
     const { modules, events, root, resolveOpts, target, watch } = this;
     const { extensions, alias } = resolveOpts;
 
     const graph = doResolve(entry, null, null);
 
-    function doResolve(absPath, parentModule, pkgInfo) {
-      const id = absPath;
+    function doResolve(pathOrMod, parentModule, pkgInfo) {
+      let mod = null;
+      let id = '';
+      if (isObject(pathOrMod)) {
+        mod = pathOrMod;
+        id = pathOrMod.id;
+      } else {
+        id = pathOrMod;
+      }
 
       const cached = modules.get(id);
       if (cached) {
-        cached.parents.push(parentModule);
+        parentModule && cached.parents.push(parentModule);
         return cached;
       }
 
-      const mod = createModule(id);
+      if (!mod) {
+        mod = createModule(id);
+      }
 
       modules.set(id, mod);
 
+      if (extra.addedModules) {
+        extra.addedModules.set(id, mod);
+      }
+
       parentModule && mod.parents.push(parentModule);
 
-      mod.pkgInfo = pkgInfo;
+      if (!mod.pkgInfo) {
+        mod.pkgInfo = pkgInfo;
+      }
 
-      const shouldResolve = shouldResolveModule(id);
-      const content =
-        extra.content ||
-        (shouldResolve
-          ? readFileSync(id, { encoding: 'utf-8' })
-          : readFileSync(id));
-
-      if (pkgInfo) {
-        mod.outpath = pkgInfo.__outpath__;
+      if (mod.pkgInfo) {
+        mod.outpath = mod.pkgInfo.__outpath__;
       } else {
-        mod.hash = extra.hash || hash(content);
-        mod.outpath = relative(root, id);
+        mod.hash = hash(readFileSync(id));
+        if (!mod.outpath) {
+          mod.outpath = relative(root, id);
+        }
 
         if (!watch) {
           const hashCode = mod.hash.slice(0, HASH_LEN);
@@ -143,8 +150,10 @@ class Pack {
 
       events.emit('moduleCreated', that.injectHelper({ mod }));
 
-      if (shouldResolve) {
+      if (shouldResolveModule(id)) {
+        mod.type = 'script';
         const cwd = dirname(id);
+        const content = readFileSync(id, { encoding: 'utf-8' });
         const ast = resolveModuleImport(content);
         mod.ast = ast;
         events.emit('beforeModuleResolve', that.injectHelper({ mod }));
@@ -342,11 +351,11 @@ class Pack {
         for (const loader of loaders) {
           if (
             !loader.test ||
-            !loader.test.test(mod.currentPath) ||
+            !loader.test.test(mod._currentPath) ||
             !loader.use ||
             !loader.use.length ||
             (loader.exclude &&
-              loader.exclude.some((pattern) => pattern.test(mod.currentPath)))
+              loader.exclude.some((pattern) => pattern.test(mod._currentPath)))
           ) {
             continue;
           }
@@ -360,15 +369,19 @@ class Pack {
             }
             fn(that.injectHelper({ mod }), opts);
           }
-          if (mod.extensionChanged) {
+          if (mod._extensionChanged) {
             extensionChangedModules.add(mod);
-            mod.extensionChanged = false;
+            mod._extensionChanged = false;
           }
         }
       }
 
       if (extensionChangedModules.size) {
-        doApply([...extensionChangedModules.values()]);
+        const modules = [...extensionChangedModules.values()];
+        doApply(modules);
+        for (const mod of modules) {
+          mod._currentPath = mod.id;
+        }
       }
     }
   }
@@ -421,9 +434,9 @@ class Pack {
 
       if (mod.ast) {
         const code = genCodeFromAST(mod.ast);
-        writeFileSync(dest, code, { encoding: 'utf-8' });
+        writeFileSync(dest, code);
       } else {
-        copyFileSync(mod.currentPath, dest);
+        copyFileSync(mod.id, dest);
       }
 
       events.emit('moduleWrited', this.injectHelper({ mod }));
@@ -443,29 +456,37 @@ class Pack {
 
         if (!mod) return;
 
-        const content = readFileSync(filename, { encoding: 'utf-8' });
-        const newHash = hash(content);
+        const newHash = hash(readFileSync(filename));
         if (mod.hash === newHash) {
           return;
         }
 
         log(`changing: ${filename}`);
 
-        this.removeModule(mod);
+        mod.reset();
+        this.modules.delete(mod.id);
 
-        const newMod = this.resolveDependencis(mod.id, {
-          content,
-          hash: newHash,
+        // only new added module need write
+        const addedModules = new Map();
+        this.resolveDependencis(mod, {
+          addedModules,
         });
-        // fix parents reference
-        newMod.parents = mod.parents;
-        for (const parent of mod.parents) {
-          parent.dependencis.push(newMod);
+
+        const added = [...addedModules.values()];
+
+        this.applyLoaders([...new Set([...mod.dependencis, ...added])]);
+
+        // root module need inject global code again
+        if (mod === this.graph) {
+          this.injectGlobalCode();
         }
 
-        this.applyLoaders(newMod);
+        this.writeContent(added);
 
-        this.writeContent(newMod);
+        // css via style-loader must write parent module again
+        if (mod.type === 'inject-style') {
+          this.writeContent(mod.parents);
+        }
 
         changedFiles.delete(filename);
       }
@@ -530,8 +551,9 @@ _global.process = { env: JSON.parse('${env}')};
 class Module {
   constructor(id) {
     this.id = id;
-    this.extensionChanged = false;
-    this.currentPath = id;
+    this.type = '';
+    this._extensionChanged = false;
+    this._currentPath = id;
     this.outpath = '';
     this.ast = null;
     this.noWrite = false;
@@ -541,12 +563,25 @@ class Module {
     this.dependencis = [];
   }
 
-  changeExtension(ext) {
-    const pathname = changeExtension(this.currentPath, ext);
+  reset() {
+    for (const dep of this.dependencis) {
+      removeItem(dep.parents, this);
+    }
 
-    if (pathname !== this.currentPath) {
-      this.extensionChanged = true;
-      this.currentPath = pathname;
+    this._extensionChanged = false;
+    this._currentPath = this.id;
+    this.ast = null;
+    this.noWrite = false;
+    this.hash = '';
+    this.dependencis = [];
+  }
+
+  changeExtension(ext) {
+    const pathname = changeExtension(this._currentPath, ext);
+
+    if (pathname !== this._currentPath) {
+      this._extensionChanged = true;
+      this._currentPath = pathname;
       this.outpath = changeExtension(this.outpath, ext);
 
       this.walkParentASTNode((node) => {
