@@ -58,7 +58,7 @@ class Pack {
     this.target = target;
     this.define = define;
 
-    this.importedModules = new Map();
+    this.modules = new Map();
     this.graph = null;
     this.events = new EventEmitter();
   }
@@ -68,10 +68,9 @@ class Pack {
   }
 
   run() {
-    const { importedModules, graph } = this;
     this.applyPlugins();
 
-    this.events.emit('start', injectHelper({ modules: importedModules }));
+    this.events.emit('start', this.injectHelper());
 
     this.graph = this.resolveDependencis();
 
@@ -85,7 +84,7 @@ class Pack {
 
     this.writeContent();
 
-    this.events.emit('end', injectHelper({ modules: importedModules, graph }));
+    this.events.emit('end', this.injectHelper());
 
     log('build done');
 
@@ -101,7 +100,8 @@ class Pack {
     if (!entry) {
       entry = this.entry;
     }
-    const { importedModules, events, root, resolveOpts, target } = this;
+    const that = this;
+    const { modules, events, root, resolveOpts, target } = this;
     const { extensions, alias } = resolveOpts;
 
     const graph = doResolve(entry, null, null);
@@ -109,7 +109,7 @@ class Pack {
     function doResolve(absPath, parentModule, pkgInfo) {
       const id = absPath;
 
-      const cached = importedModules.get(id);
+      const cached = modules.get(id);
       if (cached) {
         cached.parents.push(parentModule);
         return cached;
@@ -117,7 +117,7 @@ class Pack {
 
       const mod = createModule(id);
 
-      importedModules.set(id, mod);
+      modules.set(id, mod);
 
       parentModule && mod.parents.push(parentModule);
 
@@ -128,7 +128,7 @@ class Pack {
         mod.outpath = relative(root, id);
       }
 
-      events.emit('moduleCreated', injectHelper({ mod }));
+      events.emit('moduleCreated', that.injectHelper({ mod }));
 
       if (shouldResolveModule(id)) {
         const cwd = dirname(id);
@@ -138,7 +138,7 @@ class Pack {
 
         const ast = resolveModuleImport(sourceCode);
         mod.ast = ast;
-        events.emit('beforeModuleResolve', injectHelper({ mod }));
+        events.emit('beforeModuleResolve', that.injectHelper({ mod }));
 
         for (const node of ast) {
           if (node.type !== 'import') {
@@ -288,7 +288,7 @@ class Pack {
           );
         }
 
-        events.emit('moduleResolved', injectHelper({ mod }));
+        events.emit('moduleResolved', that.injectHelper({ mod }));
       }
 
       return mod;
@@ -301,13 +301,14 @@ class Pack {
    * apply loader on each imported module
    */
   applyLoaders(modules) {
-    const { loaders, events, root } = this;
+    const that = this;
+    const { loaders } = this;
     if (!loaders || !loaders.length) {
       return;
     }
 
     if (!modules) {
-      modules = [...this.importedModules.values()];
+      modules = [...this.modules.values()];
     }
     modules = ensureArray(modules);
 
@@ -336,7 +337,7 @@ class Pack {
               opts = fn[1];
               fn = fn[0];
             }
-            fn(injectHelper({ mod, events, root }), opts);
+            fn(that.injectHelper({ mod }), opts);
           }
           if (mod.extensionChanged) {
             extensionChangedModules.add(mod);
@@ -355,7 +356,7 @@ class Pack {
    * register plugin hooks
    */
   applyPlugins() {
-    const { plugins, events } = this;
+    const { plugins } = this;
     if (!plugins || !plugins.length) {
       return;
     }
@@ -366,7 +367,7 @@ class Pack {
         opts = plugin[1];
         plugin = plugin[0];
       }
-      plugin(injectHelper({ events }), opts);
+      plugin(this.injectHelper(), opts);
     }
   }
 
@@ -376,7 +377,7 @@ class Pack {
   writeContent(modules) {
     const { output, events } = this;
     if (!modules) {
-      modules = [...this.importedModules.values()];
+      modules = [...this.modules.values()];
     }
     modules = ensureArray(modules);
 
@@ -385,7 +386,7 @@ class Pack {
     }
 
     for (const mod of modules) {
-      events.emit('beforeModuleWrite', injectHelper({ mod }));
+      events.emit('beforeModuleWrite', this.injectHelper({ mod }));
 
       if (mod.noWrite) {
         continue;
@@ -404,7 +405,7 @@ class Pack {
         copyFileSync(mod.currentPath, dest);
       }
 
-      events.emit('moduleWrited', injectHelper({ mod }));
+      events.emit('moduleWrited', this.injectHelper({ mod }));
     }
   }
 
@@ -417,7 +418,7 @@ class Pack {
     const changedFiles = new Set();
     const repack = debounce(() => {
       for (const filename of changedFiles) {
-        const mod = this.importedModules.get(filename);
+        const mod = this.modules.get(filename);
 
         if (!mod) return;
 
@@ -429,7 +430,7 @@ class Pack {
 
         log(`changing: ${filename}`);
 
-        removeModule(mod, this.importedModules);
+        removeModule(mod, this.modules);
 
         const newMod = this.resolveDependencis(mod.id, {
           content,
@@ -463,7 +464,7 @@ class Pack {
    * e.g. process.env.NODE_ENV
    */
   injectGlobalCode() {
-    const { graph, importedModules } = this;
+    const { graph, modules } = this;
 
     const env = JSON.stringify({ ...extractEnv(['NODE_ENV']), ...this.define });
     const code = `${getGlobalThis.toString()}
@@ -478,7 +479,7 @@ _global.process = { env: JSON.parse('${env}')};
     );
 
     const mod = createModule(pathname);
-    importedModules.set(pathname, mod);
+    modules.set(pathname, mod);
     mod.parents.push(graph);
     graph.dependencis.unshift(mod);
     mod.outpath = join(dirname(graph.outpath), pathname);
@@ -487,7 +488,7 @@ _global.process = { env: JSON.parse('${env}')};
   }
 
   renameWithHash() {
-    for (const mod of [...this.importedModules.values()]) {
+    for (const mod of this.modules.values()) {
       if (mod.pkgInfo) {
         continue;
       }
@@ -515,6 +516,14 @@ _global.process = { env: JSON.parse('${env}')};
         }
       }
     }
+  }
+
+  injectHelper(obj) {
+    return {
+      ...this,
+      ...obj,
+      createASTNode,
+    };
   }
 }
 
@@ -553,21 +562,14 @@ function createModule(id) {
   return mod;
 }
 
-function removeModule(mod, importedModules) {
-  importedModules.delete(mod.id);
+function removeModule(mod, modules) {
+  modules.delete(mod.id);
   for (const dep of mod.dependencis) {
     removeItem(dep.parents, mod);
   }
   for (const parent of mod.parents) {
     removeItem(parent.dependencis, mod);
   }
-}
-
-function injectHelper(obj) {
-  return {
-    ...obj,
-    createASTNode,
-  };
 }
 
 export default (config) => Pack.pack(config);
