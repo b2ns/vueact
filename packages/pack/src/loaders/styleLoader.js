@@ -23,15 +23,15 @@ export default ({ mod, createASTNode }) => {
 
   for (const parent of mod.parents) {
     const { ast } = parent;
-    if (!parent.__injectedStyle__) {
-      parent.__injectedStyle__ = new WeakMap();
+    if (!ast.__injectedStyle__) {
+      ast.__injectedStyle__ = new WeakMap();
     }
-    const oldNode = parent.__injectedStyle__.get(mod);
+    const oldNode = ast.__injectedStyle__.get(mod);
     if (oldNode) {
       oldNode.rawCode = node.rawCode;
     } else {
       ast.push(node);
-      parent.__injectedStyle__.set(mod, node);
+      ast.__injectedStyle__.set(mod, node);
     }
   }
 };

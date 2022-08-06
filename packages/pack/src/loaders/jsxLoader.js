@@ -1,24 +1,12 @@
 import { parse } from '../jsxParser.js';
-import { genCodeFromAST } from '../utils.js';
 
-export default ({ mod, createASTNode }, opts) => {
+export default ({ mod }, opts) => {
   const { ast } = mod;
   mod.changeExtension('js');
 
-  let lastImportStatementIndex = 0;
-  for (let i = 0; i < ast.length; i++) {
-    const node = ast[i];
-    if (node.type === 'import') {
-      lastImportStatementIndex = i;
+  for (const node of ast) {
+    if (node.type === 'other') {
+      node.rawCode = parse(node.rawCode, opts);
     }
-  }
-
-  const restNodes = ast.splice(
-    lastImportStatementIndex ? lastImportStatementIndex + 1 : 0
-  );
-  if (restNodes.length) {
-    const sourceCode = genCodeFromAST(restNodes);
-    const code = parse(sourceCode, opts);
-    ast.push(createASTNode('', code));
   }
 };
