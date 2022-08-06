@@ -1,7 +1,6 @@
-import { relative } from 'path';
 import { removeItem } from '../utils.js';
 
-export default ({ mod: { id, parents }, root, createASTNode }) => {
+export default ({ mod: { id, parents, outpath }, createASTNode }) => {
   for (const parent of parents) {
     const { ast } = parent;
     for (const node of ast) {
@@ -10,10 +9,7 @@ export default ({ mod: { id, parents }, root, createASTNode }) => {
         removeItem(
           ast,
           node,
-          createASTNode(
-            'other',
-            `const ${imported.name} = '${relative(root, node.absPath)}';`
-          )
+          createASTNode('other', `const ${imported.name} = '${outpath}';`)
         );
       }
     }

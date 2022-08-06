@@ -34,6 +34,8 @@ import {
 
 const require = createRequire(import.meta.url);
 
+const HASH_LEN = 8;
+
 class Pack {
   constructor({
     root = './',
@@ -72,6 +74,10 @@ class Pack {
     this.events.emit('start', injectHelper({ modules: importedModules }));
 
     this.graph = this.resolveDependencis();
+
+    if (!this.watch) {
+      this.renameWithHash();
+    }
 
     this.applyLoaders();
 
@@ -459,7 +465,14 @@ class Pack {
   injectGlobalCode() {
     const { graph, importedModules } = this;
 
-    const pathname = './___.pack_global___.js';
+    const env = JSON.stringify({ ...extractEnv(['NODE_ENV']), ...this.define });
+    const code = `${getGlobalThis.toString()}
+const _global = getGlobalThis();
+_global.process = { env: JSON.parse('${env}')};
+`;
+    const hashCode = hash(code).slice(0, HASH_LEN);
+
+    const pathname = `./___.pack_global___.${hashCode}.js`;
     graph.ast.unshift(
       createASTNode('import', `import '${pathname}';\n`, { pathname })
     );
@@ -470,16 +483,38 @@ class Pack {
     graph.dependencis.unshift(mod);
     mod.outpath = join(dirname(graph.outpath), pathname);
 
-    const env = JSON.stringify({ ...extractEnv(['NODE_ENV']), ...this.define });
-    mod.ast = [
-      createASTNode(
-        'other',
-        `${getGlobalThis.toString()}
-const _global = getGlobalThis();
-_global.process = { env: JSON.parse('${env}')};
-`
-      ),
-    ];
+    mod.ast = [createASTNode('other', code)];
+  }
+
+  renameWithHash() {
+    for (const mod of [...this.importedModules.values()]) {
+      if (mod.pkgInfo) {
+        continue;
+      }
+      if (!mod.hash) {
+        mod.hash = hash(readFileSync(mod.id));
+      }
+      const hashCode = mod.hash.slice(0, HASH_LEN);
+
+      const ext = extname(mod.outpath);
+      mod.outpath = mod.outpath.replace(
+        new RegExp(`${ext}$`),
+        `.${hashCode}${ext}`
+      );
+
+      for (const parent of mod.parents) {
+        const { ast } = parent;
+        for (const node of ast) {
+          const { pathname } = node;
+          if (node.absPath === mod.id) {
+            const ext = extname(pathname);
+            node.setPathname(
+              pathname.replace(new RegExp(`${ext}$`), `.${hashCode}${ext}`)
+            );
+          }
+        }
+      }
+    }
   }
 }
 
