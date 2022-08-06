@@ -1,17 +1,7 @@
 import { removeItem } from '../utils.js';
 
-export default ({ mod: { id, parents } }) => {
-  if (!parents.length) {
-    return;
-  }
-  for (const parent of parents) {
-    const { ast } = parent;
-    for (const node of ast) {
-      if (node.type === 'import') {
-        if (node.absPath === id) {
-          removeItem(ast, node);
-        }
-      }
-    }
-  }
+export default ({ mod }) => {
+  mod.walkParentASTNode((node, ast) => {
+    removeItem(ast, node);
+  });
 };

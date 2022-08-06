@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import { readdirSync, statSync, watch } from 'fs';
 import { builtinModules } from 'module';
 import os from 'os';
-import { join } from 'path';
+import { join, extname } from 'path';
 
 export const isLinux = os.type() === 'Linux';
 export const isMac = os.type() === 'Darwin';
@@ -50,4 +50,25 @@ export function recursiveWatch(dir, handler) {
 
 export function hash(data, algorithm = 'md5') {
   return createHash(algorithm).update(data).digest('hex');
+}
+
+export function changeExtension(pathname, ext) {
+  if (!ext) {
+    return pathname;
+  }
+
+  if (!ext.startsWith('.')) {
+    ext = '.' + ext;
+  }
+
+  const oldExt = extname(pathname);
+  if (oldExt === ext) {
+    return pathname;
+  }
+
+  if (oldExt) {
+    return pathname.replace(new RegExp(`${oldExt}$`), ext);
+  }
+
+  return `${pathname}${ext}`;
 }

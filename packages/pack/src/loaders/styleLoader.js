@@ -1,10 +1,10 @@
 import { escape } from '@vueact/shared';
 import { readFileSync } from 'fs';
 
-export default ({ mod: { id, parents, skipWrite }, createASTNode }) => {
-  skipWrite();
+export default ({ mod, createASTNode }) => {
+  mod.skipWrite();
 
-  if (!parents.length) {
+  if (!mod.parents.length) {
     return;
   }
 
@@ -12,12 +12,15 @@ export default ({ mod: { id, parents, skipWrite }, createASTNode }) => {
     'inject-css',
     `(function () {
   const el = document.createElement('style');
-  el.innerHTML = \`${escape(readFileSync(id, { encoding: 'utf-8' }), '`\\')}\`;
+  el.innerHTML = \`${escape(
+    readFileSync(mod.id, { encoding: 'utf-8' }),
+    '`\\'
+  )}\`;
   document.head.appendChild(el);
 })();`
   );
 
-  for (const parent of parents) {
+  for (const parent of mod.parents) {
     const { ast } = parent;
     ast.push(node);
   }

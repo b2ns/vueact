@@ -4,8 +4,8 @@ export default (
   { events, createASTNode },
   { factoryName = 'h', libName = 'vueact' } = {}
 ) => {
-  events.on('beforeModuleResolve', ({ mod: { id, ast } }) => {
-    if (extname(id) !== '.jsx') {
+  events.on('beforeModuleResolve', ({ mod }) => {
+    if (extname(mod.id) !== '.jsx') {
       return;
     }
 
@@ -16,6 +16,6 @@ export default (
         pathname: libName,
       }
     );
-    ast.unshift(node);
+    mod.ast.unshift(node);
   });
 };

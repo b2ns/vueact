@@ -9,6 +9,7 @@ import {
 import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'path';
 import {
+  changeExtension,
   createASTNode,
   debounce,
   ensureArray,
@@ -24,7 +25,6 @@ import {
   isPkg,
   isRelative,
   log,
-  normalizeExtension,
   recursiveWatch,
   removeItem,
   resolveAlias,
@@ -287,11 +287,6 @@ class Pack {
             node.setPathname(join(relativePath, outpath));
           }
 
-          // ensure all extension change to '.js'
-          // App -> App.js
-          // App.jsx -> App.js
-          normalizeExtension(node);
-
           mod.dependencis.push(
             doResolve(node.absPath, mod, _pkgInfo || pkgInfo)
           );
@@ -456,7 +451,7 @@ class Pack {
 
         log(`changing: ${filename}`);
 
-        removeModule(mod, this.modules);
+        this.removeModule(mod);
 
         const newMod = this.resolveDependencis(mod.id, {
           content,
@@ -520,51 +515,78 @@ _global.process = { env: JSON.parse('${env}')};
       createASTNode,
     };
   }
+
+  removeModule(mod) {
+    this.modules.delete(mod.id);
+    for (const dep of mod.dependencis) {
+      removeItem(dep.parents, mod);
+    }
+    for (const parent of mod.parents) {
+      removeItem(parent.dependencis, mod);
+    }
+  }
+}
+
+class Module {
+  constructor(id) {
+    this.id = id;
+    this.extensionChanged = false;
+    this.currentPath = id;
+    this.outpath = '';
+    this.ast = null;
+    this.noWrite = false;
+    this.pkgInfo = null;
+    this.hash = '';
+    this.parents = [];
+    this.dependencis = [];
+  }
+
+  changeExtension(ext) {
+    const pathname = changeExtension(this.currentPath, ext);
+
+    if (pathname !== this.currentPath) {
+      this.extensionChanged = true;
+      this.currentPath = pathname;
+      this.outpath = changeExtension(this.outpath, ext);
+
+      this.walkParentASTNode((node) => {
+        node.changeExtension(ext);
+      });
+    }
+  }
+
+  walkParentASTNode(cb, checkAllNodes = false) {
+    if (!this.parents.length) {
+      return;
+    }
+    for (const parent of this.parents) {
+      if (!parent.ast) {
+        continue;
+      }
+      for (const node of parent.ast) {
+        if (checkAllNodes || node.absPath === this.id) {
+          cb(node, parent.ast);
+        }
+      }
+    }
+  }
+
+  walkASTNode(cb) {
+    if (!this.ast) {
+      return;
+    }
+    for (const node of this.ast) {
+      cb(node, this.ast);
+    }
+  }
+
+  skipWrite() {
+    this.noWrite = true;
+  }
 }
 
 function createModule(id) {
-  const mod = {
-    id,
-    extensionChanged: false,
-    currentPath: id,
-    outpath: '',
-    ast: null,
-    noWrite: false,
-    pkgInfo: null,
-    hash: '',
-    parents: [],
-    dependencis: [],
-    changeExtension(ext) {
-      if (!ext) {
-        return;
-      }
-      if (!ext.startsWith('.')) {
-        ext = `.${ext}`;
-      }
-      const currentExt = extname(mod.currentPath);
-      if (currentExt === ext) {
-        return;
-      }
-
-      mod.extensionChanged = true;
-      mod.currentPath = mod.currentPath.replace(currentExt, ext);
-      mod.outpath = mod.outpath.replace(currentExt, ext);
-    },
-    skipWrite() {
-      mod.noWrite = true;
-    },
-  };
-  return mod;
-}
-
-function removeModule(mod, modules) {
-  modules.delete(mod.id);
-  for (const dep of mod.dependencis) {
-    removeItem(dep.parents, mod);
-  }
-  for (const parent of mod.parents) {
-    removeItem(parent.dependencis, mod);
-  }
+  return new Module(id);
 }
 
 export default (config) => Pack.pack(config);

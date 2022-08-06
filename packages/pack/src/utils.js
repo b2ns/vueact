@@ -1,4 +1,4 @@
-import { isBuiltin } from '@vueact/shared/src/node-utils.js';
+import { isBuiltin, changeExtension } from '@vueact/shared/src/node-utils.js';
 import { existsSync, statSync } from 'fs';
 import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join } from 'path';
@@ -324,11 +324,17 @@ export function createASTNode(type, rawCode, extra = {}) {
       absPath: pathname,
       imported,
       setPathname(pathname) {
+        if (!pathname) {
+          return;
+        }
         node.code = node.code.replace(
           new RegExp(`(?<='|")${node.pathname}(?='|")`),
           pathname
         );
         node.pathname = pathname;
+      },
+      changeExtension(ext) {
+        node.setPathname(changeExtension(node.pathname, ext));
       },
     });
   }
@@ -619,31 +625,6 @@ export function guessFile(pathname, extensions) {
   }
 
   return pathname;
-}
-
-export function normalizeExtension(
-  node,
-  { defaultExtension = '.js', target = 'default' } = {}
-) {
-  let { pathname } = node;
-  const ext = extname(pathname);
-  const extensions = ['.jsx', '.ts', '.tsx'];
-  if (target === 'default') {
-    extensions.push(...['.mjs', '.cjs', '.json']);
-  }
-
-  if (!ext) {
-    pathname = `${pathname}${
-      defaultExtension.startsWith('.')
-        ? defaultExtension
-        : '.' + defaultExtension
-    }`;
-  } else if (extensions.includes(ext)) {
-    pathname = pathname.replace(ext, defaultExtension);
-  } else {
-    return;
-  }
-  node.setPathname(pathname);
 }
 
 export function log(...args) {

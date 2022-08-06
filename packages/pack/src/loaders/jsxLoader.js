@@ -1,8 +1,9 @@
 import { parse } from '../jsxParser.js';
 import { genCodeFromAST } from '../utils.js';
 
-export default ({ mod: { ast, changeExtension }, createASTNode }, opts) => {
-  changeExtension('js');
+export default ({ mod, createASTNode }, opts) => {
+  const { ast } = mod;
+  mod.changeExtension('js');
 
   let lastImportStatementIndex = 0;
   for (let i = 0; i < ast.length; i++) {
