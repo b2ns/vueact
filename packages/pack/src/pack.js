@@ -74,10 +74,6 @@ class Pack {
 
     this.graph = this.resolveDependencis();
 
-    if (!this.watch) {
-      this.renameWithHash();
-    }
-
     this.applyLoaders();
 
     this.injectGlobalCode();
@@ -101,7 +97,7 @@ class Pack {
       entry = this.entry;
     }
     const that = this;
-    const { modules, events, root, resolveOpts, target } = this;
+    const { modules, events, root, resolveOpts, target, watch } = this;
     const { extensions, alias } = resolveOpts;
 
     const graph = doResolve(entry, null, null);
@@ -122,21 +118,34 @@ class Pack {
       parentModule && mod.parents.push(parentModule);
 
       mod.pkgInfo = pkgInfo;
+
+      const shouldResolve = shouldResolveModule(id);
+      const content =
+        extra.content ||
+        (shouldResolve
+          ? readFileSync(id, { encoding: 'utf-8' })
+          : readFileSync(id));
+
       if (pkgInfo) {
         mod.outpath = pkgInfo.__outpath__;
       } else {
+        mod.hash = extra.hash || hash(content);
         mod.outpath = relative(root, id);
+
+        if (!watch) {
+          const hashCode = mod.hash.slice(0, HASH_LEN);
+          const ext = extname(mod.outpath);
+          mod.outpath = ext
+            ? mod.outpath.replace(new RegExp(`${ext}$`), `_${hashCode}${ext}`)
+            : `${mod.outpath}_${hashCode}`;
+        }
       }
 
       events.emit('moduleCreated', that.injectHelper({ mod }));
 
-      if (shouldResolveModule(id)) {
+      if (shouldResolve) {
         const cwd = dirname(id);
-        const sourceCode =
-          extra.content || readFileSync(id, { encoding: 'utf-8' });
-        mod.hash = pkgInfo ? '' : extra.hash || hash(sourceCode);
-
-        const ast = resolveModuleImport(sourceCode);
+        const ast = resolveModuleImport(content);
         mod.ast = ast;
         events.emit('beforeModuleResolve', that.injectHelper({ mod }));
 
@@ -286,6 +295,23 @@ class Pack {
           mod.dependencis.push(
             doResolve(node.absPath, mod, _pkgInfo || pkgInfo)
           );
+
+          if (!watch) {
+            const nodeMod = modules.get(node.absPath);
+            if (nodeMod.hash) {
+              const hashCode = nodeMod.hash.slice(0, HASH_LEN);
+              const { pathname } = node;
+              const ext = extname(pathname);
+              node.setPathname(
+                ext
+                  ? pathname.replace(
+                      new RegExp(`${ext}$`),
+                      `_${hashCode}${ext}`
+                    )
+                  : `${pathname}_${hashCode}`
+              );
+            }
+          }
         }
 
         events.emit('moduleResolved', that.injectHelper({ mod }));
@@ -473,7 +499,7 @@ _global.process = { env: JSON.parse('${env}')};
 `;
     const hashCode = hash(code).slice(0, HASH_LEN);
 
-    const pathname = `./___.pack_global___.${hashCode}.js`;
+    const pathname = `./___pack_global___${hashCode}.js`;
     graph.ast.unshift(
       createASTNode('import', `import '${pathname}';\n`, { pathname })
     );
@@ -485,37 +511,6 @@ _global.process = { env: JSON.parse('${env}')};
     mod.outpath = join(dirname(graph.outpath), pathname);
 
     mod.ast = [createASTNode('other', code)];
-  }
-
-  renameWithHash() {
-    for (const mod of this.modules.values()) {
-      if (mod.pkgInfo) {
-        continue;
-      }
-      if (!mod.hash) {
-        mod.hash = hash(readFileSync(mod.id));
-      }
-      const hashCode = mod.hash.slice(0, HASH_LEN);
-
-      const ext = extname(mod.outpath);
-      mod.outpath = mod.outpath.replace(
-        new RegExp(`${ext}$`),
-        `.${hashCode}${ext}`
-      );
-
-      for (const parent of mod.parents) {
-        const { ast } = parent;
-        for (const node of ast) {
-          const { pathname } = node;
-          if (node.absPath === mod.id) {
-            const ext = extname(pathname);
-            node.setPathname(
-              pathname.replace(new RegExp(`${ext}$`), `.${hashCode}${ext}`)
-            );
-          }
-        }
-      }
-    }
   }
 
   injectHelper(obj, injectThis = true) {
