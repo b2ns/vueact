@@ -356,7 +356,7 @@ class Pack {
    * register plugin hooks
    */
   applyPlugins() {
-    const { plugins } = this;
+    const { plugins, events } = this;
     if (!plugins || !plugins.length) {
       return;
     }
@@ -367,7 +367,7 @@ class Pack {
         opts = plugin[1];
         plugin = plugin[0];
       }
-      plugin(this.injectHelper(), opts);
+      plugin(this.injectHelper({ events }, false), opts);
     }
   }
 
@@ -518,9 +518,9 @@ _global.process = { env: JSON.parse('${env}')};
     }
   }
 
-  injectHelper(obj) {
+  injectHelper(obj, injectThis = true) {
     return {
-      ...this,
+      ...(injectThis ? this : {}),
       ...obj,
       createASTNode,
     };

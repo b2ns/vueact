@@ -7,3 +7,4 @@ export { default as styleLoader } from './src/loaders/styleLoader.js';
 export { default as assetsLoader } from './src/loaders/assetsLoader.js';
 export { default as copyPlugin } from './src/plugins/copyPlugin.js';
 export { default as injectJSXFactoryPlugin } from './src/plugins/injectJSXFactoryPlugin.js';
+export { default as htmlPlugin } from './src/plugins/htmlPlugin.js';
