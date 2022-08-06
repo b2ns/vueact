@@ -5,7 +5,7 @@ export default ({ mod, createASTNode }) => {
 
   mod.ast = [
     createASTNode(
-      'other',
+      '',
       `export default ${readFileSync(mod.id, { encoding: 'utf-8' })}`
     ),
   ];

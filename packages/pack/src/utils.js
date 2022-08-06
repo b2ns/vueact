@@ -181,7 +181,7 @@ export function resolveModuleImport(sourceCode) {
 
   function stageOtherCode() {
     if (code) {
-      ast.push(createASTNode('other', code));
+      ast.push(createASTNode('', code));
       code = '';
     }
   }
@@ -250,7 +250,7 @@ export function resolveModuleImport(sourceCode) {
         require2Imports[pathname] = true;
       }
 
-      ast.push(createASTNode('other', varName));
+      ast.push(createASTNode('', varName));
 
       i = nextIndex;
       continue;
@@ -268,7 +268,7 @@ export function resolveModuleImport(sourceCode) {
         moduleExportNames[varName] = true;
       }
 
-      ast.push(createASTNode('other', rawCode));
+      ast.push(createASTNode('', rawCode));
 
       i = nextIndex;
       continue;
@@ -288,19 +288,19 @@ export function resolveModuleImport(sourceCode) {
     for (const varName of moduleExportNames) {
       exportCode += `export const ${varName} = module.exports.${varName};\n`;
     }
-    ast.push(createASTNode('other', exportCode));
+    ast.push(createASTNode('', exportCode));
   }
 
   // inject helper to load umd or commonjs code
   if (!isESM) {
     const head = createASTNode(
-      'other',
+      '',
       `const module = { exports: {} };
 const exports = module.exports;
 const require = () => {};
 `
     );
-    const tail = createASTNode('other', `export default module.exports;`);
+    const tail = createASTNode('', `export default module.exports;`);
 
     ast.unshift(head);
     ast.push(tail);
@@ -309,36 +309,47 @@ const require = () => {};
   return ast;
 }
 
-export function createASTNode(type, rawCode, extra = {}) {
-  const node = {
-    type,
-    rawCode,
-  };
-  if (type === 'import') {
-    const { pathname, imported } = extra;
-    Object.assign(node, {
-      rawPathname: pathname,
-      reExport: false,
-      code: rawCode,
-      pathname,
-      absPath: pathname,
-      imported,
-      setPathname(pathname) {
-        if (!pathname) {
-          return;
-        }
-        node.code = node.code.replace(
-          new RegExp(`(?<='|")${node.pathname}(?='|")`),
-          pathname
-        );
-        node.pathname = pathname;
-      },
-      changeExtension(ext) {
-        node.setPathname(changeExtension(node.pathname, ext));
-      },
-    });
+class ASTNode {
+  constructor(type, rawCode) {
+    this.type = type || 'other';
+    this.rawCode = rawCode;
   }
-  return node;
+}
+
+class ImportASTNode extends ASTNode {
+  constructor(type, rawCode, { pathname, imported, reExport = false }) {
+    super(type, rawCode);
+    this.code = rawCode;
+    this.rawPathname = pathname;
+    this.pathname = pathname;
+    this.absPath = pathname;
+    this.imported = imported;
+    this.reExport = reExport;
+  }
+
+  setPathname(pathname) {
+    if (!pathname) {
+      return;
+    }
+    this.code = this.code.replace(
+      new RegExp(`(?<='|")${this.pathname}(?='|")`),
+      pathname
+    );
+    this.pathname = pathname;
+  }
+
+  changeExtension(ext) {
+    this.setPathname(changeExtension(this.pathname, ext));
+  }
+}
+
+export function createASTNode(type, rawCode, extra = {}) {
+  switch (type) {
+    case 'import':
+      return new ImportASTNode(type, rawCode, extra);
+    default:
+      return new ASTNode(type, rawCode);
+  }
 }
 
 export function resolveESImport(sourceCode, index, keyword) {

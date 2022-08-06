@@ -6,7 +6,7 @@ export default ({ mod, createASTNode }) => {
     removeItem(
       ast,
       node,
-      createASTNode('other', `const ${imported.name} = '${mod.outpath}';`)
+      createASTNode('', `const ${imported.name} = '${mod.outpath}';`)
     );
   });
 };

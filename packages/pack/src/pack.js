@@ -505,7 +505,7 @@ _global.process = { env: JSON.parse('${env}')};
     graph.dependencis.unshift(mod);
     mod.outpath = join(dirname(graph.outpath), pathname);
 
-    mod.ast = [createASTNode('other', code)];
+    mod.ast = [createASTNode('', code)];
   }
 
   injectHelper(obj, injectThis = true) {

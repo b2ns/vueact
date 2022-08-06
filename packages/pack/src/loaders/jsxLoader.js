@@ -19,6 +19,6 @@ export default ({ mod, createASTNode }, opts) => {
   if (restNodes.length) {
     const sourceCode = genCodeFromAST(restNodes);
     const code = parse(sourceCode, opts);
-    ast.push(createASTNode('other', code));
+    ast.push(createASTNode('', code));
   }
 };
