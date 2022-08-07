@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
 import { dirname, join } from 'path';
-import pack from '../src/pack.js';
+import pack from '../index.js';
 import { parseArgs } from '../src/utils.js';
 
 const Args = parseArgs(process.argv.slice(2));

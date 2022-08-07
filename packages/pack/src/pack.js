@@ -8,6 +8,8 @@ import {
 } from 'fs';
 import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'path';
+import registerLoaders from './loaders/index.js';
+import registerPlugins from './plugins/index.js';
 import {
   changeExtension,
   createASTNode,
@@ -24,6 +26,7 @@ import {
   isObject,
   isPkg,
   isRelative,
+  isString,
   log,
   recursiveWatch,
   removeItem,
@@ -367,6 +370,9 @@ class Pack {
               opts = fn[1];
               fn = fn[0];
             }
+            if (isString(fn)) {
+              fn = registerLoaders[fn];
+            }
             fn(that.injectHelper({ mod }), opts);
           }
           if (mod._extensionChanged) {
@@ -400,6 +406,9 @@ class Pack {
       if (Array.isArray(plugin)) {
         opts = plugin[1];
         plugin = plugin[0];
+      }
+      if (isString(plugin)) {
+        plugin = registerPlugins[plugin];
       }
       plugin(this.injectHelper({ events }, false), opts);
     }
