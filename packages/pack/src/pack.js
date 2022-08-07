@@ -22,7 +22,6 @@ import {
   getPkgInfo,
   guessFile,
   hash,
-  HASH_LEN,
   isBuiltin,
   isObject,
   isPkg,
@@ -157,7 +156,7 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
         }
 
         if (!watch) {
-          const hashCode = mod.hash.slice(0, HASH_LEN);
+          const hashCode = mod.hash;
           const ext = extname(mod.outpath);
           mod.outpath = ext
             ? mod.outpath.replace(new RegExp(`${ext}$`), `_${hashCode}${ext}`)
@@ -320,7 +319,7 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
           if (!watch) {
             const nodeMod = modules.get(node.absPath);
             if (nodeMod.hash) {
-              const hashCode = nodeMod.hash.slice(0, HASH_LEN);
+              const hashCode = nodeMod.hash;
               const { pathname } = node;
               const ext = extname(pathname);
               node.setPathname(

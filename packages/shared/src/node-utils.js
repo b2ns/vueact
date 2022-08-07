@@ -50,8 +50,12 @@ export function recursiveWatch(dir, handler) {
 
 export const HASH_LEN = 8;
 
-export function hash(data, algorithm = 'md5') {
-  return createHash(algorithm).update(data).digest('hex');
+export function hash(data, len = HASH_LEN, algorithm = 'md5') {
+  const hashCode = createHash(algorithm).update(data).digest('hex');
+  if (len > 0) {
+    return hashCode.slice(0, len);
+  }
+  return hashCode;
 }
 
 export function changeExtension(pathname, ext) {

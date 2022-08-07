@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, relative } from 'path';
-import { hash, HASH_LEN } from '../utils.js';
+import { hash } from '../utils.js';
 
 const HTML_TPL = `<!DOCTYPE html>
 <html lang="en">
@@ -56,7 +56,7 @@ export default (
 
     // inject css code from css-loader
     if (shared.CSS_CODE) {
-      const hashCode = hash(shared.CSS_CODE).slice(0, HASH_LEN);
+      const hashCode = hash(shared.CSS_CODE);
       const styleFilename = `__pack_style__${hashCode}.css`;
       writeFileSync(join(dir, styleFilename), shared.CSS_CODE);
       code = code.replace(
