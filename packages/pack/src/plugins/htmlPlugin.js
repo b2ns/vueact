@@ -24,6 +24,8 @@ export default (
   if (template) {
     tpl = readFileSync(template, { encoding: 'utf-8' });
   }
+
+  // inject defined variable into template
   tpl = tpl.replace(/<%= (\S*) %>/g, (_, p1) => define[p1] || '');
 
   events.on('end', ({ output, graph, shared }) => {
@@ -32,12 +34,24 @@ export default (
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
-    let code = tpl.replace(
+
+    let code = tpl;
+
+    // inject global script
+    if (shared.GLOBAL_SCRIPT) {
+      code = code.replace(
+        /<\/head>/g,
+        `<script>\n${shared.GLOBAL_SCRIPT}</script>\n</head>`
+      );
+    }
+
+    // inject entry js file
+    code = code.replace(
       /<\/body>/g,
       `<script type="module" src="${relative(
         dir,
         join(output, graph.outpath)
-      )}"></script></body>`
+      )}"></script>\n</body>`
     );
 
     // inject css code from css-loader
@@ -47,7 +61,7 @@ export default (
       writeFileSync(join(dir, styleFilename), shared.CSS_CODE);
       code = code.replace(
         /<\/head>/g,
-        `<link rel="stylesheet" href="${styleFilename}"></head>`
+        `<link rel="stylesheet" href="${styleFilename}">\n</head>`
       );
     }
 

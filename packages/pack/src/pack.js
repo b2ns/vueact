@@ -66,6 +66,20 @@ class Pack {
 
     // loader and plugin shared data
     this.shared = {};
+
+    /*
+     * inject global runtime code, load via html-plugin
+     * e.g. process.env.NODE_ENV
+     */
+    if (this.target === 'default') {
+      this.shared.GLOBAL_SCRIPT = `${getGlobalThis.toString()}
+var __global__ = getGlobalThis();
+__global__.process = { env: JSON.parse('${JSON.stringify({
+        ...extractEnv(['NODE_ENV']),
+        ...this.define,
+      })}')};
+`;
+    }
   }
 
   static pack(config) {
@@ -80,8 +94,6 @@ class Pack {
     this.graph = this.resolveDependencis();
 
     this.applyLoaders();
-
-    this.injectGlobalCode();
 
     this.writeContent();
 
@@ -487,11 +499,6 @@ class Pack {
 
         this.applyLoaders([...new Set([...mod.dependencis, ...added])]);
 
-        // root module need inject global code again
-        if (mod === this.graph) {
-          this.injectGlobalCode();
-        }
-
         this.writeContent(added);
 
         // css via style-loader must write parent module again
@@ -510,34 +517,6 @@ class Pack {
       changedFiles.add(filename);
       repack();
     });
-  }
-
-  /*
-   * inject global runtime code
-   * e.g. process.env.NODE_ENV
-   */
-  injectGlobalCode() {
-    const { graph, modules } = this;
-
-    const env = JSON.stringify({ ...extractEnv(['NODE_ENV']), ...this.define });
-    const code = `${getGlobalThis.toString()}
-const _global = getGlobalThis();
-_global.process = { env: JSON.parse('${env}')};
-`;
-    const hashCode = hash(code).slice(0, HASH_LEN);
-
-    const pathname = `./___pack_global___${hashCode}.js`;
-    graph.ast.unshift(
-      createASTNode('import', `import '${pathname}';\n`, { pathname })
-    );
-
-    const mod = createModule(pathname);
-    modules.set(pathname, mod);
-    mod.parents.push(graph);
-    graph.dependencis.unshift(mod);
-    mod.outpath = join(dirname(graph.outpath), pathname);
-
-    mod.ast = [createASTNode('', code)];
   }
 
   injectHelper(obj, injectThis = true) {
