@@ -48,6 +48,8 @@ export function recursiveWatch(dir, handler) {
   }
 }
 
+export const HASH_LEN = 8;
+
 export function hash(data, algorithm = 'md5') {
   return createHash(algorithm).update(data).digest('hex');
 }

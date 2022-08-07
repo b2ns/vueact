@@ -22,6 +22,7 @@ import {
   getPkgInfo,
   guessFile,
   hash,
+  HASH_LEN,
   isBuiltin,
   isObject,
   isPkg,
@@ -36,8 +37,6 @@ import {
 } from './utils.js';
 
 const require = createRequire(import.meta.url);
-
-const HASH_LEN = 8;
 
 class Pack {
   constructor({
@@ -64,6 +63,9 @@ class Pack {
     this.modules = new Map();
     this.graph = null;
     this.events = new EventEmitter();
+
+    // loader and plugin shared data
+    this.shared = {};
   }
 
   static pack(config) {
