@@ -54,13 +54,10 @@ just for fun 🕹️
 
   - [x] inject renderFactory `h` automatically
   - [x] watch mode
-  - [x] fix option: resolve
-  - [x] option: define
-  - [ ] jsonLoader
-  - [ ] assetsLoader
-  - [ ] htmlPlugin
-  - [ ] cssExtractPlugin
-  - [ ] a javascript parser(e.g., [acorn](https://github.com/acornjs/acorn)) for more analyzing on source code
-  - [ ] tree-shaking
+  - [x] jsonLoader
+  - [x] assetsLoader
+  - [x] htmlPlugin
   - [ ] dev server
   - [ ] hmr(i.e., hot module replacement)
+  - [ ] a javascript parser(e.g., [acorn](https://github.com/acornjs/acorn)) for more analyzing on source code
+  - [ ] tree-shaking
