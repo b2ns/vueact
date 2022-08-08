@@ -7,9 +7,19 @@ export const type = (val) => {
   return strType;
 };
 
+export const isNumber = (val) => typeof val === 'number';
+
 export const isString = (val) => typeof val === 'string';
 
 export const isBoolean = (val) => typeof val === 'boolean';
+
+export const isUndef = (val) => typeof val === 'undefined';
+
+export const isDef = (val) => !isUndef(val);
+
+export const isSymbol = (val) => typeof val === 'symbol';
+
+export const isBigint = (val) => typeof val === 'bigint';
 
 export const isObject = (val) => val !== null && typeof val === 'object';
 
