@@ -37,6 +37,17 @@ export default (
 
     let code = tpl;
 
+    // inject css code from css-loader
+    if (shared.CSS_CODE) {
+      const hashCode = hash(shared.CSS_CODE);
+      const styleFilename = `__pack_style__${hashCode}.css`;
+      writeFileSync(join(dir, styleFilename), shared.CSS_CODE);
+      code = code.replace(
+        /<\/head>/g,
+        `<link rel="stylesheet" href="${styleFilename}">\n</head>`
+      );
+    }
+
     // inject global script
     if (shared.GLOBAL_SCRIPT) {
       code = code.replace(
@@ -53,17 +64,6 @@ export default (
         join(output, graph.outpath)
       )}"></script>\n</body>`
     );
-
-    // inject css code from css-loader
-    if (shared.CSS_CODE) {
-      const hashCode = hash(shared.CSS_CODE);
-      const styleFilename = `__pack_style__${hashCode}.css`;
-      writeFileSync(join(dir, styleFilename), shared.CSS_CODE);
-      code = code.replace(
-        /<\/head>/g,
-        `<link rel="stylesheet" href="${styleFilename}">\n</head>`
-      );
-    }
 
     writeFileSync(filepath, code);
   });
