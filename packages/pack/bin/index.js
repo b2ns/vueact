@@ -1,14 +1,15 @@
 import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import pack from '../index.js';
-import { parseArgs } from '../src/utils.js';
+import { isDef, parseArgs } from '../src/utils.js';
 
 const Args = parseArgs(process.argv.slice(2));
 
-let config = null;
+let config = {};
 
 if (Args.config) {
   config = (await import(Args.config)).default;
+  delete Args.config;
 } else {
   let dir = process.cwd();
   while (dir && dir !== '/') {
@@ -21,9 +22,11 @@ if (Args.config) {
   }
 }
 
-if (!config) {
-  console.error(`pack: can not find a configuration file 'pack.config.js'`);
-  process.exit(1);
+for (const key in Args) {
+  const val = Args[key];
+  if (isDef(val)) {
+    config[key] = val;
+  }
 }
 
-pack({ ...config, watch: Args.watch });
+pack(config);
