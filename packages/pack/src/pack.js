@@ -10,6 +10,7 @@ import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'path';
 import registerLoaders from './loaders/index.js';
 import registerPlugins from './plugins/index.js';
+import PackServer from './server/index.js';
 import {
   changeExtension,
   createASTNode,
@@ -45,9 +46,10 @@ class Pack {
     resolve: resolveOpts = {},
     loaders,
     plugins,
-    watch,
+    watch = false,
     target = 'default', // default(web), node
     define = {},
+    preview = false,
   }) {
     this.root = resolve(root);
     this.entry = resolve(this.root, entry);
@@ -58,6 +60,7 @@ class Pack {
     this.watch = watch;
     this.target = target;
     this.define = define;
+    this.preview = preview;
 
     this.modules = new Map();
     this.graph = null;
@@ -86,6 +89,12 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
   }
 
   run() {
+    // only start the server while preview
+    if (this.preview) {
+      this.startServer();
+      return;
+    }
+
     this.applyPlugins();
 
     this.events.emit('start', this.injectHelper());
@@ -102,6 +111,7 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
 
     if (this.watch) {
       this.doWatch();
+      this.startServer();
     }
   }
 
@@ -516,6 +526,15 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
       changedFiles.add(filename);
       repack();
     });
+  }
+
+  /*
+   * start dev server
+   */
+  startServer() {
+    PackServer.createServer({
+      root: join(this.output),
+    }).listen();
   }
 
   injectHelper(obj, injectThis = true) {
