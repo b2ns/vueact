@@ -1,6 +1,6 @@
 import { createReadStream, existsSync, statSync } from 'fs';
 import { extname, join, resolve } from 'path';
-import { isTextType } from '../utils.js';
+import { MIME_TYPES, isTextType } from '../utils.js';
 
 export default (dir, opts = {}) => {
   dir = resolve(dir || './');
@@ -43,7 +43,7 @@ export default (dir, opts = {}) => {
     }
 
     let mimeType =
-      mimeTypes[extname(absPath).slice(1)] || 'application/octet-stream';
+      MIME_TYPES[extname(absPath).slice(1)] || 'application/octet-stream';
     if (isTextType(mimeType)) mimeType += ';charset=utf-8';
 
     const headers = {
@@ -62,19 +62,4 @@ export default (dir, opts = {}) => {
 
     createReadStream(absPath).pipe(res);
   };
-};
-
-// TODO add more mime
-const mimeTypes = {
-  js: 'application/javascript',
-  json: 'application/json',
-  css: 'text/css',
-  html: 'text/html',
-  htm: 'text/html',
-  txt: 'text/plain',
-  gif: 'image/gif',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  svg: 'image/svg+xml',
 };
