@@ -4,6 +4,8 @@ import { MIME_TYPES, isTextType } from '../utils.js';
 
 export default (dir, opts = {}) => {
   dir = resolve(dir || './');
+  const { dev } = opts;
+  const CACHE = new Map();
 
   return (req, res, next) => {
     const { method } = req;
@@ -25,7 +27,16 @@ export default (dir, opts = {}) => {
       return res.end();
     }
 
-    const stats = statSync(absPath);
+    let stats = null;
+    if (dev) {
+      stats = statSync(absPath);
+    } else {
+      stats = CACHE.get(absPath);
+      if (!stats) {
+        stats = statSync(absPath);
+        CACHE.set(absPath, stats);
+      }
+    }
 
     // use browser cache
     const etag = `W/"${stats.size}-${stats.mtime.getTime()}"`;
@@ -35,7 +46,7 @@ export default (dir, opts = {}) => {
     }
 
     let cacheControl = '';
-    if (opts.dev || extname(pathname) === '.html') {
+    if (dev || extname(pathname) === '.html') {
       cacheControl = 'no-cache';
     } else {
       // we use content hash in url to do cache busting
