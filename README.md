@@ -24,7 +24,7 @@ just for fun 🕹️
   - stateful functional component
   - props.children (i.e., slots in Vue)
   - render props
-- no dependencis, all tools homemade
+- other lib and tools
   - JSX parser (extend the React JSX)
   - assets bundler (no bundling, use native ES modules in the browser) 📦
 
@@ -57,7 +57,6 @@ just for fun 🕹️
   - [x] jsonLoader
   - [x] assetsLoader
   - [x] htmlPlugin
-  - [ ] dev server
+  - [x] dev server
   - [ ] hmr(i.e., hot module replacement)
-  - [ ] a javascript parser(e.g., [acorn](https://github.com/acornjs/acorn)) for more analyzing on source code
   - [ ] tree-shaking
