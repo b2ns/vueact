@@ -8,6 +8,7 @@ import {
 } from 'fs';
 import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import registerLoaders from './loaders/index.js';
 import registerPlugins from './plugins/index.js';
 import PackServer from './server/index.js';
@@ -35,6 +36,8 @@ import {
   resolveModuleImport,
   shouldResolveModule,
 } from './utils.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const require = createRequire(import.meta.url);
 
@@ -105,13 +108,21 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
 
     this.writeContent();
 
-    this.events.emit('end', this.injectHelper());
-
     log('build done');
 
     if (this.watch) {
       this.doWatch();
-      this.startServer();
+
+      const app = this.startServer();
+      app.httpServer.once('listening', () => {
+        this.shared.GLOBAL_SCRIPT += `
+__global__.process.env.SOCKET_ORIGIN = '${app.origin}';
+${readFileSync(join(__dirname, './client/index.js'), 'utf-8')}`;
+
+        this.events.emit('end', this.injectHelper());
+      });
+    } else {
+      this.events.emit('end', this.injectHelper());
     }
   }
 
@@ -532,7 +543,7 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
    * start dev server
    */
   startServer() {
-    PackServer.createServer({
+    return PackServer.createServer({
       root: join(this.output),
       dev: this.watch,
     }).listen();
