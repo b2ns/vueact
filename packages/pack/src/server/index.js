@@ -12,6 +12,8 @@ export default class PackServer {
     this.middlewares = [];
     this.httpServer = createServer();
 
+    this.origin = '';
+
     this.init();
   }
 
@@ -35,10 +37,9 @@ export default class PackServer {
     });
 
     this.httpServer.once('listening', () => {
-      const { address, port } = this.httpServer.address();
       console.log(`
 listening ...
-  http://${address}:${port}
+  ${this.origin}
 `);
     });
   }
@@ -56,7 +57,9 @@ listening ...
   }
 
   listen(port = PORT, host = HOST) {
+    this.origin = `http://${host}:${port}`;
     this.httpServer.listen(port, host);
+    return this;
   }
 }
 
