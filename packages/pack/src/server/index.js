@@ -20,9 +20,9 @@ export default class PackServer {
   }
 
   init() {
-    const { root = process.cwd() } = this.config;
+    const { root = process.cwd(), dev = false } = this.config;
 
-    this.use(preprocessMiddleware()).use(staticAssets(root));
+    this.use(preprocessMiddleware()).use(staticAssets(root, { dev }));
 
     this.httpServer.on('request', createRequestListener(this.middlewares));
 

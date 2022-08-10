@@ -534,6 +534,7 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
   startServer() {
     PackServer.createServer({
       root: join(this.output),
+      dev: this.watch,
     }).listen();
   }
 
