@@ -1,5 +1,5 @@
-import { createServer } from 'http';
-import { isUndef } from '../utils.js';
+import { createServer, STATUS_CODES } from 'http';
+import { isObject, isUndef } from '../utils.js';
 import preprocessMiddleware from './middlewares/preprocess.js';
 import staticAssets from './middlewares/staticAssets.js';
 
@@ -48,6 +48,9 @@ listening ...
       handler = route;
       route = '/';
     }
+    if (!route.startsWith('/')) {
+      route = '/' + route;
+    }
     this.middlewares.push({ route, handler });
     return this;
   }
@@ -57,6 +60,7 @@ listening ...
   }
 }
 
+// use express/connect middleware form
 function createRequestListener(middlewares) {
   return (req, res) => {
     let index = 0;
@@ -64,14 +68,16 @@ function createRequestListener(middlewares) {
     const next = (err) => {
       const middleware = middlewares[index++];
       if (!middleware) {
-        done(err, req, res);
+        setImmediate(() => done(err, req, res));
         return;
       }
 
       const path = req.path || '/';
       const { route, handler } = middleware;
+      const routeRE = new RegExp(`^${route}([/].*)?$`);
 
-      if (path.slice(0, route.length) !== route) {
+      // skip unmatched route
+      if (!routeRE.test(path)) {
         return next(err);
       }
 
@@ -99,16 +105,17 @@ function done(err, req, res) {
   let msg = '';
 
   if (res.headersSent) {
+    req.socket.destroy();
     return;
   }
 
   if (err) {
     headers = err.headers;
     status = err.status || err.statusCode || res.statusCode;
-    msg = status;
+    msg = err.msg || STATUS_CODES[status] || status;
   } else {
     status = 404;
-    msg = 'Not Found';
+    msg = STATUS_CODES[status] || status;
   }
 
   const body = `<!DOCTYPE html>
@@ -124,24 +131,16 @@ function done(err, req, res) {
   </body>
 </html>`;
 
-  res.statusCode = status;
-  res.statusMessage = msg;
-
-  res.removeHeader('Content-Encoding');
-  res.removeHeader('Content-Language');
-  res.removeHeader('Content-Range');
-
-  if (headers) {
+  if (isObject(headers)) {
     for (const key in headers) {
       res.setHeader(key, headers[key]);
     }
   }
 
-  res.setHeader('Content-Security-Policy', "default-src 'none'");
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Content-Length', Buffer.byteLength(body, 'utf8'));
+  res
+    .setHeader('Content-Type', 'text/html; charset=utf-8')
+    .setHeader('Content-Length', Buffer.byteLength(body, 'utf8'))
+    .writeHead(status, msg);
 
   if (req.method === 'HEAD') {
     res.end();
