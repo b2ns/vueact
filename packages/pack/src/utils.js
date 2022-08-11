@@ -34,8 +34,19 @@ export const isNewLine = (char) => /[\n\r]/.test(char);
 
 export function isImport(code, index) {
   if (isTheWord('import', code, index)) {
+    let i = 'import'.length + index;
+    while (i < code.length) {
+      const char = code[i];
+      if (char === '.') {
+        return false;
+      } else if (isQuote(char)) {
+        return true;
+      }
+      i++;
+    }
     return true;
   }
+
   return false;
 }
 
