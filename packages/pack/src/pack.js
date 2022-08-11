@@ -116,11 +116,12 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
       const app = this.startServer();
       app.httpServer.once('listening', () => {
         this.shared.GLOBAL_SCRIPT += `
-__global__.process.env.SOCKET_ORIGIN = '${app.origin}';
+__global__.process.env.SOCKET_ORIGIN = '${app.origin.replace(/^https?/, 'ws')}';
 ${readFileSync(join(__dirname, './client/index.js'), 'utf-8')}`;
 
         this.events.emit('end', this.injectHelper());
       });
+      this.app = app;
     } else {
       this.events.emit('end', this.injectHelper());
     }
@@ -528,6 +529,7 @@ ${readFileSync(join(__dirname, './client/index.js'), 'utf-8')}`;
 
         changedFiles.delete(filename);
       }
+      this.app.send({ type: 'reload' });
     });
 
     recursiveWatch(dirname(this.entry), (event, filename) => {

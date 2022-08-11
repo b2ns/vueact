@@ -2,6 +2,7 @@ import { createServer, STATUS_CODES } from 'http';
 import { isObject, isUndef } from '../utils.js';
 import preprocessMiddleware from './middlewares/preprocess.js';
 import staticAssets from './middlewares/staticAssets.js';
+import { WebSocketServer } from 'ws';
 
 const HOST = 'localhost';
 const PORT = 8080;
@@ -11,6 +12,10 @@ export default class PackServer {
     this.config = config;
     this.middlewares = [];
     this.httpServer = createServer();
+
+    if (this.config.dev) {
+      this.ws = new WebSocketServer({ noServer: true });
+    }
 
     this.origin = '';
 
@@ -42,6 +47,27 @@ listening ...
   ${this.origin}
 `);
     });
+
+    if (this.ws) {
+      this.httpServer.on('upgrade', (req, socket, head) => {
+        if (req.headers['sec-websocket-protocol'] === 'pack-hmr') {
+          this.ws.handleUpgrade(req, socket, head, (w) => {
+            this.ws.emit('connection', w, req);
+          });
+        }
+      });
+
+      this.ws.on('connection', (socket) => {
+        // socket.on('message', (raw) => {
+        //   console.log(raw);
+        // });
+        socket.send(JSON.stringify({ type: 'connected' }));
+      });
+
+      this.ws.on('error', (e) => {
+        console.err(e);
+      });
+    }
   }
 
   use(route, handler) {
@@ -60,6 +86,17 @@ listening ...
     this.origin = `http://${host}:${port}`;
     this.httpServer.listen(port, host);
     return this;
+  }
+
+  send(payload) {
+    if (!this.ws) {
+      return;
+    }
+    this.ws.clients.forEach((client) => {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify(payload));
+      }
+    });
   }
 }
 

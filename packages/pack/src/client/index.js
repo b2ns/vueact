@@ -21,20 +21,22 @@ class PackClient {
       },
       { once: true }
     );
+
     this.ws.addEventListener('error', (err) => {
       console.error(err);
     });
+
     this.ws.addEventListener('close', () => {
       console.log(`[ws]: disconneted`);
     });
-    this.ws.addEventListener('message', (ev) => {
-      console.log(ev);
-      this.handleMessage(ev.data);
+
+    this.ws.addEventListener('message', ({ data }) => {
+      this.handleMessage(JSON.parse(data));
     });
   }
 
-  send(...args) {
-    this.ws.send(...args);
+  send(payload) {
+    this.ws.send(JSON.stringify(payload));
   }
 
   close(...args) {
@@ -48,6 +50,7 @@ class PackClient {
       case 'update':
         break;
       case 'reload':
+        location.reload();
         break;
       case 'error':
         break;
