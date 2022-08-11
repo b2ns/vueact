@@ -1,6 +1,6 @@
 import { escape } from '@vueact/shared';
 import { readFileSync } from 'fs';
-import { removeItem } from '../utils.js';
+import { hash, removeItem } from '../utils.js';
 
 export default ({ mod, createASTNode, watch, shared }) => {
   mod.walkParentASTNode((node, ast) => {
@@ -16,31 +16,30 @@ export default ({ mod, createASTNode, watch, shared }) => {
 
   if (watch) {
     // load via style element
+    mod.content = readFileSync(mod.id, 'utf-8');
+    mod.styleId = mod.type + hash(mod.id);
     const node = createASTNode(
-      `inject-style`,
+      mod.type,
       `(function () {
   const el = document.createElement('style');
-  el.innerHTML = \`${escape(
-    readFileSync(mod.id, { encoding: 'utf-8' }),
-    '`\\'
-  )}\`;
+  el.id = '${mod.styleId}';
+  el.innerHTML = \`${escape(mod.content, '`\\')}\`;
   document.head.appendChild(el);
 })();
 `
     );
 
-    for (const parent of mod.parents) {
-      const { ast } = parent;
-      if (!ast.__injectedStyle__) {
-        ast.__injectedStyle__ = new WeakMap();
-      }
-      const oldNode = ast.__injectedStyle__.get(mod);
-      if (oldNode) {
-        oldNode.rawCode = node.rawCode;
-      } else {
-        ast.push(node);
-        ast.__injectedStyle__.set(mod, node);
-      }
+    const parent = mod.parents[0];
+    const { ast } = parent;
+    if (!ast.__injectedStyle__) {
+      ast.__injectedStyle__ = new WeakMap();
+    }
+    const oldNode = ast.__injectedStyle__.get(mod);
+    if (oldNode) {
+      oldNode.rawCode = node.rawCode;
+    } else {
+      ast.push(node);
+      ast.__injectedStyle__.set(mod, node);
     }
   } else {
     // extract style and load via html plugin

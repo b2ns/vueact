@@ -48,6 +48,21 @@ class PackClient {
       case 'connected':
         break;
       case 'update':
+        for (const update of payload.updates) {
+          if (update.type === 'js') {
+            console.log('js');
+          } else {
+            let el = document.querySelector(`#${update.id}`);
+            if (el) {
+              el.innerHTML = update.data;
+            } else {
+              el = document.createElement('style');
+              el.id = update.id;
+              el.innerHTML = update.data;
+              document.head.appendChild(el);
+            }
+          }
+        }
         break;
       case 'reload':
         location.reload();

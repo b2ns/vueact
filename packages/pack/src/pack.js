@@ -495,6 +495,7 @@ ${readFileSync(join(__dirname, './client/index.js'), 'utf-8')}`;
 
     const changedFiles = new Set();
     const repack = debounce(() => {
+      const updates = [];
       for (const filename of changedFiles) {
         const mod = this.modules.get(filename);
 
@@ -525,11 +526,17 @@ ${readFileSync(join(__dirname, './client/index.js'), 'utf-8')}`;
         // css via style-loader must write parent module again
         if (mod.type === 'inject-style') {
           this.writeContent(mod.parents);
+          updates.push({ type: 'style', id: mod.styleId, data: mod.content });
         }
 
         changedFiles.delete(filename);
       }
-      this.app.send({ type: 'reload' });
+
+      if (updates.length) {
+        this.app.send({ type: 'update', updates });
+      } else {
+        this.app.send({ type: 'reload' });
+      }
     });
 
     recursiveWatch(dirname(this.entry), (event, filename) => {
