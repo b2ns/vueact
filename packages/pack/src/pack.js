@@ -47,8 +47,8 @@ class Pack {
     entry = './src/main.js',
     output = './dist',
     resolve: resolveOpts = {},
-    loaders,
-    plugins,
+    loaders = [],
+    plugins = [],
     watch = false,
     target = 'default', // default(web), node
     define = {},
@@ -85,6 +85,10 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
       })}')};
 `;
     }
+
+    if (this.watch) {
+      this.loaders.push(createInjectHMRLoader());
+    }
   }
 
   static pack(config) {
@@ -103,6 +107,7 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
     this.events.emit('start', this.injectHelper());
 
     this.graph = this.resolveDependencis();
+    this.graph.isRoot = true;
 
     this.applyLoaders();
 
@@ -116,8 +121,10 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
       const app = this.startServer();
       app.httpServer.once('listening', () => {
         this.shared.GLOBAL_SCRIPT += `
-__global__.process.env.SOCKET_ORIGIN = '${app.origin.replace(/^https?/, 'ws')}';
-${readFileSync(join(__dirname, './client/index.js'), 'utf-8')}`;
+__global__.process.env.SOCKET_ORIGIN = '${app.origin.replace(
+          /^https?/,
+          'ws'
+        )}';`;
 
         this.events.emit('end', this.injectHelper());
       });
@@ -338,8 +345,9 @@ ${readFileSync(join(__dirname, './client/index.js'), 'utf-8')}`;
             doResolve(node.absPath, mod, _pkgInfo || pkgInfo)
           );
 
+          const nodeMod = modules.get(node.absPath);
+          nodeMod.rawPathname = node.rawPathname;
           if (!watch) {
-            const nodeMod = modules.get(node.absPath);
             if (nodeMod.hash) {
               const hashCode = nodeMod.hash;
               const { pathname } = node;
@@ -527,6 +535,36 @@ ${readFileSync(join(__dirname, './client/index.js'), 'utf-8')}`;
         if (mod.type === 'inject-style') {
           this.writeContent(mod.parents);
           updates.push({ type: 'style', id: mod.styleId, data: mod.content });
+        } else if (mod.type === 'script') {
+          const outpath = ensurePathPrefix(mod.outpath) + `?hash=${mod.hash}`;
+          updates.push({
+            type: 'js',
+            id: mod.id,
+            isSelfUpdate: true,
+            outpath,
+          });
+
+          const propagate = (mod) => {
+            const { parents } = mod;
+            if (!parents || !parents.length) {
+              return;
+            }
+            const outpath = ensurePathPrefix(mod.outpath) + `?hash=${mod.hash}`;
+
+            for (const parent of mod.parents) {
+              updates.push({
+                type: 'js',
+                id: parent.id,
+                isSelfUpdate: false,
+                rawPathname: mod.rawPathname,
+                outpath,
+              });
+
+              propagate(parent);
+            }
+          };
+
+          propagate(mod);
         }
 
         changedFiles.delete(filename);
@@ -590,6 +628,9 @@ class Module {
     this.hash = '';
     this.parents = [];
     this.dependencis = [];
+    this.isRoot = false;
+    this._injectedHMR = false;
+    this.rawPathname = '';
   }
 
   reset() {
@@ -603,6 +644,7 @@ class Module {
     this.noWrite = false;
     this.hash = '';
     this.dependencis = [];
+    this._injectedHMR = false;
   }
 
   changeExtension(ext) {
@@ -651,6 +693,56 @@ class Module {
 
 function createModule(id) {
   return new Module(id);
+}
+
+function createInjectHMRLoader() {
+  const code = readFileSync(join(__dirname, './client/index.js'));
+  const pathname = `__pack_hmr__${hash(code)}.js`;
+  const hmrModule = createModule(pathname);
+  hmrModule.outpath = pathname;
+  hmrModule.ast = [createASTNode('', code)];
+
+  return {
+    test: /\.js$/,
+    exclude: [/node_modules/],
+    use: [
+      ({ mod, modules, createASTNode }) => {
+        if (mod.pkgInfo || mod._injectedHMR) {
+          return;
+        }
+
+        mod._injectedHMR = true;
+
+        if (!modules.has(pathname)) {
+          modules.set(pathname, hmrModule);
+        }
+
+        const hrmRelativePath = ensurePathPrefix(
+          relative(dirname(mod.outpath), pathname)
+        );
+
+        mod.ast.unshift(
+          createASTNode(
+            '',
+            `import { createHMRContext as __hmr__ } from '${hrmRelativePath}';
+import.meta.hot = __hmr__('${mod.id}');
+`
+          )
+        );
+
+        if (mod.isRoot) {
+          mod.ast.unshift(
+            createASTNode(
+              '',
+              `import { PackClient } from '${hrmRelativePath}';
+PackClient.createClient();
+`
+            )
+          );
+        }
+      },
+    ],
+  };
 }
 
 export default (config) => Pack.pack(config);
