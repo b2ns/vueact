@@ -72,19 +72,7 @@ class Pack {
     // loader and plugin shared data
     this.shared = {};
 
-    /*
-     * inject global runtime code, load via html-plugin
-     * e.g. process.env.NODE_ENV
-     */
-    if (this.target === 'default') {
-      this.shared.GLOBAL_SCRIPT = `${getGlobalThis.toString()}
-var __global__ = getGlobalThis();
-__global__.process = { env: JSON.parse('${JSON.stringify({
-        ...extractEnv(['NODE_ENV']),
-        ...this.define,
-      })}')};
-`;
-    }
+    this.injectGlobalCode();
 
     if (this.watch) {
       this.loaders.push(createInjectClientLoader());
@@ -120,11 +108,9 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
 
       const app = this.startServer();
       app.httpServer.once('listening', () => {
-        this.shared.GLOBAL_SCRIPT += `
-__global__.process.env.SOCKET_ORIGIN = '${app.origin.replace(
-          /^https?/,
-          'ws'
-        )}';`;
+        this.injectGlobalCode({
+          'env.SOCKET_ORIGIN': app.origin.replace(/^https?/, 'ws'),
+        });
 
         this.events.emit('end', this.injectHelper());
       });
@@ -592,6 +578,42 @@ __global__.process.env.SOCKET_ORIGIN = '${app.origin.replace(
       root: join(this.output),
       dev: this.watch,
     }).listen();
+  }
+
+  /*
+   * inject global runtime code, load via html-plugin
+   * e.g. process.env.NODE_ENV
+   */
+  injectGlobalCode(vars, code) {
+    if (this.target !== 'default') {
+      return;
+    }
+
+    if (!this.shared.GLOBAL_SCRIPT) {
+      this.shared.GLOBAL_SCRIPT = `${getGlobalThis.toString()}
+var __global__ = getGlobalThis();
+__global__.process = { env: ${JSON.stringify({
+        ...extractEnv(['NODE_ENV']),
+        ...this.define,
+      })}};
+`;
+    }
+
+    let varKeys = null;
+    if (vars && (varKeys = Object.keys(vars)).length) {
+      this.shared.GLOBAL_SCRIPT += varKeys
+        .map(
+          (key) =>
+            `__global__.process${
+              key.startsWith('[') ? key : '.' + key
+            } = ${JSON.stringify(vars[key])};`
+        )
+        .join('\n');
+    }
+
+    if (code) {
+      this.shared.GLOBAL_SCRIPT += code;
+    }
   }
 
   injectHelper(obj, injectThis = true) {
