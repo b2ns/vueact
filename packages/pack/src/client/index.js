@@ -81,20 +81,18 @@ const hotModulesMap = new Map();
 
 let queued = [];
 let pending = false;
-function queueUpdate(p) {
+async function queueUpdate(p) {
   queued.push(p);
   if (!pending) {
     pending = true;
-    Promise.resolve().then(() => {
-      const loading = [...queued];
-      queued = [];
-      pending = false;
-      Promise.all(loading).then((fns) => {
-        for (const fn of fns) {
-          fn && fn();
-        }
-      });
-    });
+    await Promise.resolve();
+    const loading = [...queued];
+    queued = [];
+    // eslint-disable-next-line require-atomic-updates
+    pending = false;
+    for (const fn of await Promise.all(loading)) {
+      fn && fn();
+    }
   }
 }
 
@@ -104,39 +102,38 @@ async function fetchUpdate({ id, isSelfUpdate, rawPathname, outpath }) {
     return;
   }
 
-  const moduleMap = new Map();
+  const newModuleMap = new Map();
 
   const modulesToUpdate = new Set();
   if (isSelfUpdate) {
     modulesToUpdate.add(id);
   } else {
-    for (const { deps } of mod.callbacks) {
-      deps.forEach((dep) => {
-        if (rawPathname === dep) {
-          modulesToUpdate.add(dep);
-        }
-      });
+    if (mod.callbackMap.has(rawPathname)) {
+      modulesToUpdate.add(rawPathname);
     }
   }
 
-  const qualifiedCallbacks = mod.callbacks.filter(({ deps }) =>
-    deps.some((dep) => modulesToUpdate.has(dep))
-  );
-
   await Promise.all(
-    Array.from(modulesToUpdate).map(async (dep) => {
+    [...modulesToUpdate].map(async (dep) => {
       try {
         const newMod = await import(outpath);
-        moduleMap.set(dep, newMod);
+        newModuleMap.set(dep, newMod);
       } catch (e) {
         console.error(e);
       }
     })
   );
 
+  const callbacks = [...modulesToUpdate].reduce((arr, dep) => {
+    if (mod.callbackMap.has(dep)) {
+      arr.push(...mod.callbackMap.get(dep));
+    }
+    return arr;
+  }, []);
+
   return () => {
-    for (const { deps, fn } of qualifiedCallbacks) {
-      fn(deps.map((dep) => moduleMap.get(dep)));
+    for (const fn of callbacks) {
+      fn(fn.deps.map((dep) => newModuleMap.get(dep)));
     }
   };
 }
@@ -144,12 +141,12 @@ async function fetchUpdate({ id, isSelfUpdate, rawPathname, outpath }) {
 export function createHMRContext(hostPath) {
   const mod = hotModulesMap.get(hostPath);
   if (mod) {
-    mod.callbacks = [];
+    mod.callbackMap = new Map();
   }
 
   const hot = {
     accept(deps, cb) {
-      if (!cb) {
+      if (!deps || !cb) {
         cb = deps;
         deps = [hostPath];
       }
@@ -162,21 +159,26 @@ export function createHMRContext(hostPath) {
       if (!mod) {
         mod = {
           id: hostPath,
-          callbacks: [],
+          callbackMap: new Map(),
         };
         hotModulesMap.set(hostPath, mod);
       }
 
-      mod.callbacks.push({
-        deps,
-        fn: (mods) => {
-          if (mods.length > 1) {
-            cb(mods);
-          } else {
-            cb(mods[0]);
-          }
-        },
-      });
+      const fn = (mods) => {
+        if (cb) {
+          mods.length > 1 ? cb(mods) : cb(mods[0]);
+        }
+      };
+      fn.deps = deps;
+
+      for (const dep of deps) {
+        let callbacks = mod.callbackMap.get(dep);
+        if (!callbacks) {
+          callbacks = [];
+          mod.callbackMap.set(dep, callbacks);
+        }
+        callbacks.push(fn);
+      }
     },
   };
   return hot;
