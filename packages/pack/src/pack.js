@@ -621,6 +621,7 @@ class Module {
   constructor(id) {
     this.id = id;
     this.type = '';
+    this.extension = extname(id);
     this._extensionChanged = false;
     this._currentPath = id;
     this.outpath = '';
@@ -711,7 +712,7 @@ function createInjectHMRLoader() {
     exclude: [/node_modules/],
     use: [
       ({ mod, modules, createASTNode }) => {
-        if (mod.pkgInfo || mod._injectedHMR) {
+        if (mod.pkgInfo || mod.extension === '.json' || mod._injectedHMR) {
           return;
         }
 
