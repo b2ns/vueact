@@ -1,8 +1,9 @@
 import { createServer, STATUS_CODES } from 'http';
+import { createSecureServer } from 'http2';
+import { WebSocketServer } from 'ws';
 import { isObject, isUndef } from '../utils.js';
 import preprocessMiddleware from './middlewares/preprocess.js';
 import staticAssets from './middlewares/staticAssets.js';
-import { WebSocketServer } from 'ws';
 
 const HOST = 'localhost';
 const PORT = 8080;
@@ -11,9 +12,20 @@ export default class PackServer {
   constructor(config = {}) {
     this.config = config;
     this.middlewares = [];
-    this.httpServer = createServer();
 
-    if (this.config.dev) {
+    const { https: httpsOptions, dev } = this.config;
+    if (httpsOptions) {
+      this.isHttps = true;
+      this.httpServer = createSecureServer({
+        maxSessionMemory: 1000,
+        ...httpsOptions,
+        allowHTTP1: true,
+      });
+    } else {
+      this.httpServer = createServer();
+    }
+
+    if (dev) {
       this.ws = new WebSocketServer({ noServer: true });
     }
 
@@ -83,7 +95,7 @@ listening ...
   }
 
   listen(port = PORT, host = HOST) {
-    this.origin = `http://${host}:${port}`;
+    this.origin = `http${this.isHttps ? 's' : ''}://${host}:${port}`;
     this.httpServer.listen(port, host);
     return this;
   }

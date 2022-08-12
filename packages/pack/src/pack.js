@@ -53,6 +53,7 @@ class Pack {
     target = 'default', // default(web), node
     define = {},
     preview = false,
+    server = {},
   }) {
     this.root = resolve(root);
     this.entry = resolve(this.root, entry);
@@ -64,6 +65,7 @@ class Pack {
     this.target = target;
     this.define = define;
     this.preview = preview;
+    this.server = server;
 
     this.modules = new Map();
     this.graph = null;
@@ -109,7 +111,7 @@ class Pack {
       const app = this.startServer();
       app.httpServer.once('listening', () => {
         this.injectGlobalCode({
-          'env.SOCKET_ORIGIN': app.origin.replace(/^https?/, 'ws'),
+          'env.SOCKET_ORIGIN': app.origin.replace(/^http/, 'ws'),
         });
 
         this.events.emit('end', this.injectHelper());
@@ -577,6 +579,7 @@ class Pack {
     return PackServer.createServer({
       root: join(this.output),
       dev: this.watch,
+      https: this.server.https,
     }).listen();
   }
 

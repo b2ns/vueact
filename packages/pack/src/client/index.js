@@ -13,7 +13,7 @@ class PackClient {
     this.ws.addEventListener(
       'open',
       () => {
-        console.log(`[ws]: connected`);
+        console.log(`[WebSocket]: connected`);
       },
       { once: true }
     );
@@ -23,7 +23,7 @@ class PackClient {
     });
 
     this.ws.addEventListener('close', () => {
-      console.log(`[ws]: disconneted`);
+      console.log(`[WebSocket]: disconneted`);
     });
 
     this.ws.addEventListener('message', ({ data }) => {
