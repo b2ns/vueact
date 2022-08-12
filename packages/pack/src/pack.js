@@ -87,7 +87,7 @@ __global__.process = { env: JSON.parse('${JSON.stringify({
     }
 
     if (this.watch) {
-      this.loaders.push(createInjectHMRLoader());
+      this.loaders.push(createInjectClientLoader());
     }
   }
 
@@ -180,9 +180,7 @@ __global__.process.env.SOCKET_ORIGIN = '${app.origin.replace(
         mod.outpath = mod.pkgInfo.__outpath__;
       } else {
         mod.hash = hash(readFileSync(id));
-        if (!mod.outpath) {
-          mod.outpath = relative(root, id);
-        }
+        mod.outpath = relative(root, id);
 
         if (!watch) {
           const hashCode = mod.hash;
@@ -533,10 +531,8 @@ __global__.process.env.SOCKET_ORIGIN = '${app.origin.replace(
 
         this.writeContent(added);
 
-        // css via style-loader must write parent module again
-        if (mod.type === 'inject-style') {
-          this.writeContent(mod.parents);
-          updates.push({ type: 'style', id: mod.styleId, data: mod.content });
+        if (mod.type === 'style') {
+          updates.push({ type: 'style', id: mod.id, content: mod.content });
         } else if (mod.type === 'script') {
           const outpath = ensurePathPrefix(mod.outpath) + `?hash=${mod.hash}`;
           updates.push({
@@ -644,6 +640,7 @@ class Module {
 
     this._extensionChanged = false;
     this._currentPath = this.id;
+    this.outpath = '';
     this.ast = null;
     this.content = '';
     this.noWrite = false;
@@ -700,12 +697,12 @@ function createModule(id) {
   return new Module(id);
 }
 
-function createInjectHMRLoader() {
+function createInjectClientLoader() {
   const code = readFileSync(join(__dirname, './client/index.js'));
-  const pathname = `__pack_hmr__${hash(code)}.js`;
-  const hmrModule = createModule(pathname);
-  hmrModule.outpath = pathname;
-  hmrModule.content = code;
+  const pathname = `__pack_client__${hash(code)}.js`;
+  const clientModule = createModule(pathname);
+  clientModule.outpath = pathname;
+  clientModule.content = code;
 
   return {
     test: /\.js$/,
@@ -719,19 +716,20 @@ function createInjectHMRLoader() {
         mod._injectedHMR = true;
 
         if (!modules.has(pathname)) {
-          modules.set(pathname, hmrModule);
+          modules.set(pathname, clientModule);
         }
 
-        const hrmRelativePath = ensurePathPrefix(
+        const clientRelativePath = ensurePathPrefix(
           relative(dirname(mod.outpath), pathname)
         );
 
         mod.ast.unshift(
           createASTNode(
             '',
-            `import { createHMRContext as __hmr__ } from '${hrmRelativePath}';
-import.meta.hot = __hmr__('${mod.id}');
-`
+            `import { createHMRContext as __createHMRContext__${
+              mod.type === 'style' ? ', updateStyle as __updateStyle__' : ''
+            } } from '${clientRelativePath}';
+import.meta.hot = __createHMRContext__('${mod.id}');\n`
           )
         );
       },

@@ -48,15 +48,7 @@ class PackClient {
           if (update.type === 'js') {
             queueUpdate(fetchUpdate(update));
           } else {
-            let el = document.querySelector(`#${update.id}`);
-            if (el) {
-              el.innerHTML = update.data;
-            } else {
-              el = document.createElement('style');
-              el.id = update.id;
-              el.innerHTML = update.data;
-              document.head.appendChild(el);
-            }
+            updateStyle(update.id, update.content);
           }
         }
         break;
@@ -71,6 +63,19 @@ class PackClient {
   }
 }
 PackClient.createClient();
+
+const styleMap = new Map();
+export function updateStyle(id, content) {
+  let style = styleMap.get(id);
+  if (!style) {
+    style = document.createElement('style');
+    style.innerHTML = content;
+    document.head.appendChild(style);
+    styleMap.set(id, style);
+  } else {
+    style.innerHTML = content;
+  }
+}
 
 const hotModulesMap = new Map();
 
