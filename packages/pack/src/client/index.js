@@ -1,4 +1,4 @@
-export class PackClient {
+class PackClient {
   constructor() {
     this.ws = new WebSocket(process.env.SOCKET_ORIGIN, 'pack-hmr');
 
@@ -70,6 +70,7 @@ export class PackClient {
     }
   }
 }
+PackClient.createClient();
 
 const hotModulesMap = new Map();
 

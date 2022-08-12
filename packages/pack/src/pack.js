@@ -729,17 +729,6 @@ import.meta.hot = __hmr__('${mod.id}');
 `
           )
         );
-
-        if (mod.isRoot) {
-          mod.ast.unshift(
-            createASTNode(
-              '',
-              `import { PackClient } from '${hrmRelativePath}';
-PackClient.createClient();
-`
-            )
-          );
-        }
       },
     ],
   };
