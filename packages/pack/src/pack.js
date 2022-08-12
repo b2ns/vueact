@@ -487,6 +487,8 @@ __global__.process.env.SOCKET_ORIGIN = '${app.origin.replace(
       if (mod.ast) {
         const code = genCodeFromAST(mod.ast);
         writeFileSync(dest, code);
+      } else if (mod.content) {
+        writeFileSync(dest, mod.content);
       } else {
         copyFileSync(mod.id, dest);
       }
@@ -623,14 +625,15 @@ class Module {
     this._currentPath = id;
     this.outpath = '';
     this.ast = null;
+    this.content = '';
     this.noWrite = false;
     this.pkgInfo = null;
     this.hash = '';
     this.parents = [];
     this.dependencis = [];
     this.isRoot = false;
-    this._injectedHMR = false;
     this.rawPathname = '';
+    this._injectedHMR = false;
   }
 
   reset() {
@@ -641,6 +644,7 @@ class Module {
     this._extensionChanged = false;
     this._currentPath = this.id;
     this.ast = null;
+    this.content = '';
     this.noWrite = false;
     this.hash = '';
     this.dependencis = [];
@@ -700,7 +704,7 @@ function createInjectHMRLoader() {
   const pathname = `__pack_hmr__${hash(code)}.js`;
   const hmrModule = createModule(pathname);
   hmrModule.outpath = pathname;
-  hmrModule.ast = [createASTNode('', code)];
+  hmrModule.content = code;
 
   return {
     test: /\.js$/,
