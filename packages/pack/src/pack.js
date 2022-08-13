@@ -387,7 +387,8 @@ class Pack {
             !loader.use ||
             !loader.use.length ||
             (loader.exclude &&
-              loader.exclude.some((pattern) => pattern.test(mod._currentPath)))
+              loader.exclude.test(mod._currentPath) &&
+              !(loader.include && loader.include.test(mod._currentPath)))
           ) {
             continue;
           }
@@ -731,10 +732,11 @@ function createInjectClientLoader() {
 
   return {
     test: /\.js$/,
-    exclude: [/node_modules/],
+    exclude: /node_modules|\.json\.js$/,
+    include: /\.css\.js$/,
     use: [
       ({ mod, modules, createASTNode }) => {
-        if (mod.pkgInfo || mod.extension === '.json' || mod._injectedHMR) {
+        if (mod._injectedHMR) {
           return;
         }
 
