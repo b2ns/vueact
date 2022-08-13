@@ -607,15 +607,21 @@ export function shouldResolveModule(pathname) {
   );
 }
 
+const getPkgInfoCache = new Map();
 export function getPkgInfo(pathname) {
-  while (pathname && pathname !== '/') {
-    const pkgjson = join(pathname, 'package.json');
+  if (getPkgInfoCache.has(pathname)) {
+    return getPkgInfoCache.get(pathname);
+  }
+  let _pathname = pathname;
+  while (_pathname && _pathname !== '/') {
+    const pkgjson = join(_pathname, 'package.json');
     if (existsSync(pkgjson)) {
       const pkgInfo = require(pkgjson);
-      pkgInfo.__root__ = pathname;
+      pkgInfo.__root__ = _pathname;
+      getPkgInfoCache.set(pathname, pkgInfo);
       return pkgInfo;
     }
-    pathname = dirname(pathname);
+    _pathname = dirname(_pathname);
   }
 }
 
@@ -629,22 +635,32 @@ export const GUESS_EXTENSIONS = [
   'mjs',
   'cjs',
 ];
+
+const guessFileCache = new Map();
 export function guessFile(pathname, extensions) {
+  if (guessFileCache.has(pathname)) {
+    return guessFileCache.get(pathname);
+  }
+
   const ext = extname(pathname);
 
   if (!ext) {
+    let _pathname = pathname;
     if (existsSync(pathname) && statSync(pathname).isDirectory()) {
-      pathname = join(pathname, 'index');
+      _pathname = join(pathname, 'index');
     }
-    let _pathname = '';
+    let filename = '';
     for (const ext of extensions || GUESS_EXTENSIONS) {
-      _pathname = `${pathname}.${ext}`;
-      if (existsSync(_pathname)) {
-        return _pathname;
+      filename = `${_pathname}.${ext}`;
+      if (existsSync(filename)) {
+        guessFileCache.set(pathname, filename);
+        return filename;
       }
     }
     throw new Error(`File ${pathname} not found.`);
   }
+
+  guessFileCache.set(pathname, pathname);
 
   return pathname;
 }
@@ -662,11 +678,11 @@ export function extractEnv(envs) {
   return env;
 }
 
-export function ensurePathPrefix(pathname) {
+export function ensurePathPrefix(pathname, prefix = './') {
   if (/^\.{0,2}\//g.test(pathname)) {
     return pathname;
   }
-  return `./${pathname}`;
+  return `${prefix}${pathname}`;
 }
 
 let aliasCache = null;

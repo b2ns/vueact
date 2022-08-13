@@ -46,7 +46,7 @@ module.exports = {
     'no-invalid-this': 'error',
     'no-label-var': 'error',
     'no-loop-func': 'error',
-    'no-mixed-operators': 'error',
+    // 'no-mixed-operators': 'error',
     // 'no-negated-condition': 'warn',
     'no-new-func': 'error',
     'no-new-object': 'error',

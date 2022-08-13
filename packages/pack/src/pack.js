@@ -71,6 +71,8 @@ class Pack {
     this.graph = null;
     this.events = new EventEmitter();
 
+    this._resolvedPKG = new Map();
+
     // loader and plugin shared data
     this.shared = {};
 
@@ -92,6 +94,8 @@ class Pack {
       return;
     }
 
+    const startTime = process.hrtime();
+
     this.applyPlugins();
 
     this.events.emit('start', this.injectHelper());
@@ -103,7 +107,9 @@ class Pack {
 
     this.writeContent();
 
-    log('build done');
+    const endTime = process.hrtime(startTime);
+
+    log(`build done: ${endTime[0] + endTime[1] / 1e9} s`);
 
     if (this.watch) {
       this.doWatch();
@@ -127,7 +133,8 @@ class Pack {
    */
   resolveDependencis(entry = this.entry, extra = {}) {
     const that = this;
-    const { modules, events, root, resolveOpts, target, watch } = this;
+    const { modules, events, root, resolveOpts, target, watch, _resolvedPKG } =
+      this;
     const { extensions, alias } = resolveOpts;
 
     const graph = doResolve(entry, null, null);
@@ -164,18 +171,15 @@ class Pack {
         mod.pkgInfo = pkgInfo;
       }
 
+      const content = readFileSync(id);
+
       if (mod.pkgInfo) {
         mod.outpath = mod.pkgInfo.__outpath__;
       } else {
-        mod.hash = hash(readFileSync(id));
         mod.outpath = relative(root, id);
-
+        mod.hash = hash(content);
         if (!watch) {
-          const hashCode = mod.hash;
-          const ext = extname(mod.outpath);
-          mod.outpath = ext
-            ? mod.outpath.replace(new RegExp(`${ext}$`), `_${hashCode}${ext}`)
-            : `${mod.outpath}_${hashCode}`;
+          mod.outpath = mod.outpath.replace(/\.(\w+)$/, `_${mod.hash}.$1`);
         }
       }
 
@@ -184,8 +188,7 @@ class Pack {
       if (shouldResolveModule(id)) {
         mod.type = 'script';
         const cwd = dirname(id);
-        const content = readFileSync(id, { encoding: 'utf-8' });
-        const ast = resolveModuleImport(content);
+        const ast = resolveModuleImport(content.toString());
         mod.ast = ast;
         events.emit('beforeModuleResolve', that.injectHelper({ mod }));
 
@@ -200,20 +203,17 @@ class Pack {
 
           let _pkgInfo = null;
 
-          let isInnerImport = false;
-          if ((isInnerImport = node.pathname.startsWith('#'))) {
-            // subpath import from owen package
-            // https://nodejs.org/api/packages.html#subpath-imports
-            if (isInnerImport && pkgInfo) {
-              let filepath = pkgInfo.imports[node.pathname];
-              if (isObject(filepath)) {
-                filepath = filepath[target];
-              }
-              const pathname = ensurePathPrefix(
-                relative(cwd, join(pkgInfo.__root__, filepath))
-              );
-              node.setPathname(pathname);
+          // subpath import from owen package
+          // https://nodejs.org/api/packages.html#subpath-imports
+          if (pkgInfo && node.pathname.startsWith('#')) {
+            let filepath = pkgInfo.imports[node.pathname];
+            if (isObject(filepath)) {
+              filepath = filepath[target];
             }
+            const pathname = ensurePathPrefix(
+              relative(cwd, join(pkgInfo.__root__, filepath))
+            );
+            node.setPathname(pathname);
           }
 
           node.absPath = node.pathname;
@@ -232,99 +232,103 @@ class Pack {
             if (pkgInfo) {
               _pkgInfo = { ...pkgInfo };
               _pkgInfo.__outpath__ = join(
-                dirname(_pkgInfo.__outpath__),
+                dirname(pkgInfo.__outpath__),
                 node.pathname
               );
             }
           } else if (isPkg(node.pathname)) {
-            let pkgName = node.pathname;
-            let mainFile = '';
-            const isScoped = pkgName.startsWith('@');
-            const segments = pkgName.split('/');
-            const cuttingIndex = isScoped ? 2 : 1;
-            // import from subpath
-            // e.g. import xxx from '@vueact/shared/src/xxx.js'
-            if (segments.length > cuttingIndex) {
-              pkgName = segments.slice(0, cuttingIndex).join('/');
-              mainFile = segments.slice(cuttingIndex).join('/');
+            let pkgCacheKey = node.pathname;
+            if (pkgInfo) {
+              pkgCacheKey = `${pkgInfo.name}@${pkgInfo.version}/${pkgCacheKey}`;
             }
+            if (_resolvedPKG.has(pkgCacheKey)) {
+              const cached = _resolvedPKG.get(pkgCacheKey);
+              node.absPath = cached.absPath;
+              _pkgInfo = { ...cached.pkgInfo };
+              node.setPathname(_pkgInfo.__outpath__);
+            } else {
+              let pkgName = node.pathname;
+              let mainFile = '';
+              const isScoped = pkgName.startsWith('@');
+              const segments = pkgName.split('/');
+              const cuttingIndex = isScoped ? 2 : 1;
+              // import from subpath
+              // e.g. import xxx from '@vueact/shared/src/xxx.js'
+              if (segments.length > cuttingIndex) {
+                pkgName = segments.slice(0, cuttingIndex).join('/');
+                mainFile = segments.slice(cuttingIndex).join('/');
+              }
 
-            let resolvedPath = '';
+              let resolvedPath = '';
 
-            const tryMainPath = () => {
-              resolvedPath = require.resolve(pkgName, {
-                paths: [cwd],
-              });
+              const tryMainPath = () => {
+                resolvedPath = require.resolve(pkgName, {
+                  paths: [cwd],
+                });
 
-              _pkgInfo = getPkgInfo(resolvedPath);
+                _pkgInfo = getPkgInfo(resolvedPath);
+
+                if (!mainFile) {
+                  // subpath exports
+                  // https://nodejs.org/api/packages.html#subpath-exports
+                  const { exports: _exports } = _pkgInfo;
+
+                  // we use esmodule code by default
+                  mainFile =
+                    _pkgInfo.module ||
+                    (_exports && (_exports['.'] || _exports)) ||
+                    _pkgInfo.main ||
+                    'index.js';
+                }
+                node.absPath = join(_pkgInfo.__root__, mainFile);
+
+                const absPath = guessFile(node.absPath, extensions);
+                if (absPath !== node.absPath) {
+                  node.absPath = absPath;
+                  mainFile = relative(_pkgInfo.__root__, absPath);
+                }
+              };
+
+              const trySubPath = () => {
+                resolvedPath = require.resolve(node.pathname, {
+                  paths: [cwd],
+                });
+                _pkgInfo = getPkgInfo(resolvedPath);
+                mainFile = relative(_pkgInfo.__root__, resolvedPath);
+                node.absPath = resolvedPath;
+
+                const absPath = guessFile(node.absPath, extensions);
+                if (absPath !== node.absPath) {
+                  node.absPath = absPath;
+                  mainFile = relative(_pkgInfo.__root__, absPath);
+                }
+              };
 
               if (!mainFile) {
-                // subpath exports
-                // https://nodejs.org/api/packages.html#subpath-exports
-                const { exports: _exports } = _pkgInfo;
-
-                // we use esmodule code by default
-                mainFile =
-                  _pkgInfo.module ||
-                  (_exports && (_exports['.'] || _exports)) ||
-                  _pkgInfo.main ||
-                  'index.js';
-              }
-              node.absPath = join(_pkgInfo.__root__, mainFile);
-
-              const absPath = guessFile(node.absPath, extensions);
-              if (absPath !== node.absPath) {
-                node.absPath = absPath;
-                mainFile = ensurePathPrefix(
-                  relative(_pkgInfo.__root__, node.absPath)
-                );
-              }
-            };
-
-            const trySubPath = () => {
-              resolvedPath = require.resolve(node.pathname, {
-                paths: [cwd],
-              });
-              _pkgInfo = getPkgInfo(resolvedPath);
-              mainFile = relative(_pkgInfo.__root__, resolvedPath);
-              node.absPath = resolvedPath;
-
-              const absPath = guessFile(node.absPath, extensions);
-              if (absPath !== node.absPath) {
-                node.absPath = absPath;
-                mainFile = ensurePathPrefix(
-                  relative(_pkgInfo.__root__, node.absPath)
-                );
-              }
-            };
-
-            if (!mainFile) {
-              tryMainPath();
-            } else {
-              try {
-                trySubPath();
-              } catch (error) {
                 tryMainPath();
+              } else {
+                try {
+                  trySubPath();
+                } catch (error) {
+                  tryMainPath();
+                }
               }
+
+              const outpath = join(
+                '/.pack',
+                `${_pkgInfo.name}@${_pkgInfo.version || ''}`,
+                `${mainFile}`
+              );
+
+              _pkgInfo.__outpath__ = outpath;
+
+              node.setPathname(outpath);
+
+              _resolvedPKG.set(pkgCacheKey, {
+                absPath: node.absPath,
+                pkgInfo: { ..._pkgInfo },
+              });
             }
-
-            let relativePath = relative(cwd, pkgInfo ? pkgInfo.__root__ : root);
-            if (pkgInfo) {
-              relativePath = '../../' + relativePath;
-              if (pkgInfo.name.startsWith('@')) {
-                relativePath = '../' + relativePath;
-              }
-            }
-
-            const outpath = join(
-              '.pack',
-              `${_pkgInfo.name}@${_pkgInfo.version || ''}`,
-              `${mainFile}`
-            );
-
-            _pkgInfo.__outpath__ = outpath;
-
-            node.setPathname(join(relativePath, outpath));
           }
 
           mod.dependencis.push(
@@ -332,19 +336,10 @@ class Pack {
           );
 
           const nodeMod = modules.get(node.absPath);
-          nodeMod.rawPathname = node.rawPathname;
           if (!watch) {
             if (nodeMod.hash) {
-              const hashCode = nodeMod.hash;
-              const { pathname } = node;
-              const ext = extname(pathname);
               node.setPathname(
-                ext
-                  ? pathname.replace(
-                      new RegExp(`${ext}$`),
-                      `_${hashCode}${ext}`
-                    )
-                  : `${pathname}_${hashCode}`
+                node.pathname.replace(/\.(\w+)$/, `_${nodeMod.hash}.$1`)
               );
             }
           }
@@ -543,7 +538,9 @@ class Pack {
                 type: 'js',
                 id: parent.id,
                 isSelfUpdate: false,
-                rawPathname: mod.rawPathname,
+                rawPathname: parent.ast.find(
+                  ({ absPath }) => absPath === mod.id
+                ).rawPathname,
                 outpath,
               });
 
@@ -655,7 +652,6 @@ class Module {
     this.parents = [];
     this.dependencis = [];
     this.isRoot = false;
-    this.rawPathname = '';
     this._injectedHMR = false;
   }
 
@@ -725,7 +721,7 @@ function createModule(id) {
 
 function createInjectClientLoader() {
   const code = readFileSync(join(__dirname, './client/index.js'));
-  const pathname = `__pack_client__${hash(code)}.js`;
+  const pathname = `/__pack_client__${hash(code)}.js`;
   const clientModule = createModule(pathname);
   clientModule.outpath = pathname;
   clientModule.content = code;
@@ -746,16 +742,12 @@ function createInjectClientLoader() {
           modules.set(pathname, clientModule);
         }
 
-        const clientRelativePath = ensurePathPrefix(
-          relative(dirname(mod.outpath), pathname)
-        );
-
         mod.ast.unshift(
           createASTNode(
             '',
             `import { createHMRContext as __createHMRContext__${
               mod.type === 'style' ? ', updateStyle as __updateStyle__' : ''
-            } } from '${clientRelativePath}';
+            } } from '${pathname}';
 import.meta.hot = __createHMRContext__('${mod.id}');\n`
           )
         );
