@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 
 export default ({ mod, createASTNode }) => {
-  mod.changeExtension('.js');
+  mod.changeExtension('.json.js');
 
   mod.ast = [
     createASTNode(
