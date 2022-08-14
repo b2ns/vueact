@@ -112,6 +112,11 @@ class Pack {
     log(`build done: ${endTime[0] + endTime[1] / 1e9} s`);
 
     if (this.watch) {
+      // set all modules to unchanged
+      for (const mod of this.modules.values()) {
+        mod.changing = false;
+      }
+
       this.doWatch();
 
       const app = this.startServer();
@@ -508,12 +513,13 @@ class Pack {
         this.resolveDependencis(mod, {
           addedModules,
         });
+        addedModules.delete(mod.id);
 
-        const added = [...addedModules.values()];
+        this.applyLoaders([mod, ...mod.dependencis]);
 
-        this.applyLoaders([...new Set([...mod.dependencis, ...added])]);
+        this.writeContent([mod, ...addedModules.values()]);
 
-        this.writeContent(added);
+        mod.changing = false;
 
         if (mod.type === 'style') {
           updates.push({ type: 'style', id: mod.id, content: mod.content });
@@ -653,6 +659,7 @@ class Module {
     this.dependencis = [];
     this.isRoot = false;
     this._injectedHMR = false;
+    this.changing = true;
   }
 
   reset() {
@@ -669,6 +676,7 @@ class Module {
     this.hash = '';
     this.dependencis = [];
     this._injectedHMR = false;
+    this.changing = true;
   }
 
   changeExtension(ext) {
@@ -686,11 +694,12 @@ class Module {
   }
 
   walkParentASTNode(cb, checkAllNodes = false) {
-    if (!this.parents.length) {
+    const { parents } = this;
+    if (!parents.length) {
       return;
     }
-    for (const parent of this.parents) {
-      if (!parent.ast) {
+    for (const parent of parents) {
+      if (!parent.changing) {
         continue;
       }
       for (const node of parent.ast) {
