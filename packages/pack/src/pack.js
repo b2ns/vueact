@@ -35,6 +35,7 @@ import {
   resolveAlias,
   resolveModuleImport,
   shouldResolveModule,
+  Memfs,
 } from './utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,7 @@ class Pack {
     this.modules = new Map();
     this.graph = null;
     this.events = new EventEmitter();
+    this.memfs = new Memfs();
 
     this._resolvedPKG = new Map();
 
@@ -448,13 +450,13 @@ class Pack {
    * write to the disk
    */
   writeContent(modules) {
-    const { output, events } = this;
+    const { output, events, watch, memfs } = this;
     if (!modules) {
       modules = [...this.modules.values()];
     }
     modules = ensureArray(modules);
 
-    if (!existsSync(output)) {
+    if (!existsSync(output) && !watch) {
       mkdirSync(output, { recursive: true });
     }
 
@@ -466,18 +468,28 @@ class Pack {
       }
 
       const dest = join(output, mod.outpath);
-      const dir = dirname(dest);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-      }
+      if (!watch) {
+        const dir = dirname(dest);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
 
-      if (mod.ast) {
-        const code = genCodeFromAST(mod.ast);
-        writeFileSync(dest, code);
-      } else if (mod.content) {
-        writeFileSync(dest, mod.content);
+        if (mod.ast) {
+          const code = genCodeFromAST(mod.ast);
+          writeFileSync(dest, code);
+        } else if (mod.content) {
+          writeFileSync(dest, mod.content);
+        } else {
+          copyFileSync(mod.id, dest);
+        }
       } else {
-        copyFileSync(mod.id, dest);
+        if (mod.ast) {
+          memfs.write(dest, genCodeFromAST(mod.ast));
+        } else if (mod.content) {
+          memfs.write(dest, mod.content);
+        } else {
+          memfs.write(dest, readFileSync(mod.id));
+        }
       }
 
       events.emit('moduleWrited', this.injectHelper({ mod }));
@@ -584,6 +596,7 @@ class Pack {
       root: join(this.output),
       dev: this.watch,
       https: this.server.https,
+      memfs: this.watch ? this.memfs : null,
     }).listen();
   }
 

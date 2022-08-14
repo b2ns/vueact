@@ -4,7 +4,7 @@ import { MIME_TYPES, isTextType } from '../utils.js';
 
 export default (dir, opts = {}) => {
   dir = resolve(dir || './');
-  const { dev } = opts;
+  const { dev, memfs } = opts;
   const CACHE = new Map();
 
   return (req, res, next) => {
@@ -22,14 +22,18 @@ export default (dir, opts = {}) => {
 
     const absPath = join(dir, pathname);
 
-    if (!existsSync(absPath)) {
+    if (memfs ? !memfs.exists(absPath) : !existsSync(absPath)) {
       res.writeHead(404);
       return res.end();
     }
 
     let stats = null;
     if (dev) {
-      stats = statSync(absPath);
+      if (memfs) {
+        stats = memfs.stat(absPath);
+      } else {
+        stats = statSync(absPath);
+      }
     } else {
       stats = CACHE.get(absPath);
       if (!stats) {
@@ -71,6 +75,10 @@ export default (dir, opts = {}) => {
 
     res.writeHead(200);
 
-    createReadStream(absPath).pipe(res);
+    if (!memfs) {
+      createReadStream(absPath).pipe(res);
+    } else {
+      res.end(memfs.read(absPath));
+    }
   };
 };

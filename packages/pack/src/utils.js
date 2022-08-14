@@ -725,3 +725,37 @@ export function resolveAlias(alias, node) {
     node.setPathname(pathname);
   }
 }
+
+export class Memfs {
+  constructor() {
+    this._files = {};
+  }
+
+  write(dest, content) {
+    this._files[dest] = {
+      content,
+      size: Buffer.byteLength(content),
+      mtime: new Date(),
+    };
+  }
+
+  exists(dest) {
+    return this._files[dest];
+  }
+
+  read(dest) {
+    if (this.exists(dest)) {
+      return this._files[dest].content;
+    }
+    return null;
+  }
+
+  stat(dest) {
+    if (this.exists(dest)) {
+      const res = { ...this._files[dest] };
+      delete res.content;
+      return res;
+    }
+    return null;
+  }
+}
