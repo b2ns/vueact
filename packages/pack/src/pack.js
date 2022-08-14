@@ -71,7 +71,7 @@ class Pack {
     this.modules = new Map();
     this.graph = null;
     this.events = new EventEmitter();
-    this.memfs = new Memfs();
+    this.memfs = this.watch ? new Memfs() : null;
 
     this._resolvedPKG = new Map();
 
@@ -450,13 +450,13 @@ class Pack {
    * write to the disk
    */
   writeContent(modules) {
-    const { output, events, watch, memfs } = this;
+    const { output, events, memfs } = this;
     if (!modules) {
       modules = [...this.modules.values()];
     }
     modules = ensureArray(modules);
 
-    if (!existsSync(output) && !watch) {
+    if (!memfs && !existsSync(output)) {
       mkdirSync(output, { recursive: true });
     }
 
@@ -468,7 +468,15 @@ class Pack {
       }
 
       const dest = join(output, mod.outpath);
-      if (!watch) {
+      if (memfs) {
+        if (mod.ast) {
+          memfs.write(dest, genCodeFromAST(mod.ast));
+        } else if (mod.content) {
+          memfs.write(dest, mod.content);
+        } else {
+          memfs.write(dest, readFileSync(mod.id));
+        }
+      } else {
         const dir = dirname(dest);
         if (!existsSync(dir)) {
           mkdirSync(dir, { recursive: true });
@@ -481,14 +489,6 @@ class Pack {
           writeFileSync(dest, mod.content);
         } else {
           copyFileSync(mod.id, dest);
-        }
-      } else {
-        if (mod.ast) {
-          memfs.write(dest, genCodeFromAST(mod.ast));
-        } else if (mod.content) {
-          memfs.write(dest, mod.content);
-        } else {
-          memfs.write(dest, readFileSync(mod.id));
         }
       }
 
@@ -596,7 +596,7 @@ class Pack {
       root: join(this.output),
       dev: this.watch,
       https: this.server.https,
-      memfs: this.watch ? this.memfs : null,
+      memfs: this.memfs,
     }).listen();
   }
 

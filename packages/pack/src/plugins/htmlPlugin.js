@@ -28,10 +28,10 @@ export default (
   // inject defined variable into template
   tpl = tpl.replace(/<%= (\S*) %>/g, (_, p1) => define[p1] || '');
 
-  events.on('end', ({ output, graph, shared, memfs, watch }) => {
+  events.on('end', ({ output, graph, shared, memfs }) => {
     const filepath = join(output, filename);
     const dir = dirname(filepath);
-    if (!existsSync(dir) && !watch) {
+    if (!memfs && !existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
 
@@ -65,10 +65,10 @@ export default (
       )}"></script>\n</body>`
     );
 
-    if (!watch) {
-      writeFileSync(filepath, code);
-    } else {
+    if (memfs) {
       memfs.write(filepath, code);
+    } else {
+      writeFileSync(filepath, code);
     }
   });
 };

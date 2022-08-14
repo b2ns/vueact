@@ -75,10 +75,10 @@ export default (dir, opts = {}) => {
 
     res.writeHead(200);
 
-    if (!memfs) {
-      createReadStream(absPath).pipe(res);
-    } else {
+    if (memfs) {
       res.end(memfs.read(absPath));
+    } else {
+      createReadStream(absPath).pipe(res);
     }
   };
 };
