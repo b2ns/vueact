@@ -523,7 +523,9 @@ function __require__(moduleId) {
 export default __require__;
 `;
 
-    const pathname = `/.pack/pkgs${pkgBundleUID}_${hash(content)}.js`;
+    const pathname = `/.pack/__pack_pkg_bundle_${pkgBundleUID}_${hash(
+      content
+    )}.js`;
     const pkgModule = createModule(pathname);
     pkgModule.outpath = pathname;
     pkgModule.content = content;
