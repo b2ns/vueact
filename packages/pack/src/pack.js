@@ -42,6 +42,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const require = createRequire(import.meta.url);
 
+let pkgBundleUID = 0;
+
 class Pack {
   constructor({
     root = './',
@@ -72,6 +74,7 @@ class Pack {
     this.graph = null;
     this.events = new EventEmitter();
     this.memfs = this.watch ? new Memfs() : null;
+    this.pkgModules = new Map();
 
     this._resolvedPKG = new Map();
 
@@ -107,7 +110,15 @@ class Pack {
 
     this.applyLoaders();
 
-    this.writeContent();
+    const pkgModule = this.bundlePkgModule(this.graph);
+    this.transformPkgImport(this.graph);
+    const modulesToWrite = [pkgModule];
+    for (const mod of this.modules.values()) {
+      if (!mod.pkgInfo || mod.type !== 'script') {
+        modulesToWrite.push(mod);
+      }
+    }
+    this.writeContent(modulesToWrite);
 
     const endTime = process.hrtime(startTime);
 
@@ -195,9 +206,11 @@ class Pack {
       if (shouldResolveModule(id)) {
         mod.type = 'script';
         const cwd = dirname(id);
-        const ast = resolveModuleImport(content.toString());
-        mod.ast = ast;
+        mod.content = content.toString();
         events.emit('beforeModuleResolve', that.injectHelper({ mod }));
+        const ast = resolveModuleImport(mod.content);
+        delete mod.content;
+        mod.ast = ast;
 
         for (const node of ast) {
           if (node.type !== 'import') {
@@ -280,11 +293,14 @@ class Pack {
                   // https://nodejs.org/api/packages.html#subpath-exports
                   const { exports: _exports } = _pkgInfo;
 
-                  // we use esmodule code by default
                   mainFile =
-                    _pkgInfo.module ||
-                    (_exports && (_exports['.'] || _exports)) ||
+                    (isObject(_exports)
+                      ? isObject(_exports['.'])
+                        ? _exports['.'].default
+                        : _exports['.']
+                      : _exports) ||
                     _pkgInfo.main ||
+                    _pkgInfo.module ||
                     'index.js';
                 }
                 node.absPath = join(_pkgInfo.__root__, mainFile);
@@ -425,6 +441,168 @@ class Pack {
   }
 
   /*
+   * bundle package module to reduce http request
+   */
+  bundlePkgModule(root) {
+    const { pkgModules } = this;
+    const handled = new Set();
+    const _pkgModules = [];
+    const loadedPkgModules = new Set();
+
+    doBundle(root);
+
+    function doBundle(mod) {
+      if (handled.has(mod.id)) {
+        return;
+      }
+      handled.add(mod.id);
+
+      if (mod.pkgInfo && mod.type === 'script') {
+        if (pkgModules.has(mod.id)) {
+          const loaded = pkgModules.get(mod.id);
+          loadedPkgModules.add(loaded);
+          mod.walkParentASTNode(
+            (node) => {
+              node.setPathname(mod.uid);
+              node.code = node.code.replace('require', loaded.__requireName);
+            },
+            false,
+            (parent) => Boolean(parent.pkgInfo)
+          );
+          return;
+        }
+
+        mod.walkParentASTNode(
+          (node) => {
+            node.setPathname(mod.uid);
+          },
+          false,
+          (parent) => Boolean(parent.pkgInfo)
+        );
+
+        _pkgModules.push(mod);
+      }
+
+      if (mod.dependencis.length) {
+        for (const dep of mod.dependencis) {
+          doBundle(dep);
+        }
+      }
+    }
+
+    if (!_pkgModules.length) {
+      return;
+    }
+
+    let pkgModuleCode = '';
+    for (const mod of _pkgModules) {
+      pkgModuleCode += `'${
+        mod.uid
+      }': (exports, module, require) => {\n${genCodeFromAST(mod.ast)}\n},\n`;
+    }
+
+    let loadedPkgCode = '';
+    for (const mod of loadedPkgModules) {
+      loadedPkgCode += `import ${mod.__requireName} from '${mod.outpath}';\n`;
+    }
+
+    const content = `${loadedPkgCode}
+const __modules__ = {
+${pkgModuleCode}
+};
+const __cachedModules__ = {};
+function __require__(moduleId) {
+  if (__cachedModules__[moduleId] !== void 0) {
+    return __cachedModules__[moduleId].exports;
+  }
+  const module = (__cachedModules__[moduleId] = { exports: {} });
+  __modules__[moduleId](module.exports, module, __require__);
+  try{module.exports.default = module.exports.default || module.exports;}catch(e){}
+  return module.exports;
+}
+export default __require__;
+`;
+
+    const pathname = `/.pack/pkgs${pkgBundleUID}_${hash(content)}.js`;
+    const pkgModule = createModule(pathname);
+    pkgModule.outpath = pathname;
+    pkgModule.content = content;
+    pkgModule.__requireName = `__pack_pkg_require_${pkgBundleUID}__`;
+    pkgBundleUID++;
+
+    for (const mod of _pkgModules) {
+      this.pkgModules.set(mod.id, pkgModule);
+    }
+    return pkgModule;
+  }
+
+  transformPkgImport(root) {
+    const { pkgModules } = this;
+    const handled = new Set();
+    doTransform(root);
+    function doTransform(mod) {
+      if (handled.has(mod.id)) {
+        return;
+      }
+      handled.add(mod.id);
+
+      if (mod.pkgInfo && mod.type === 'script') {
+        const pkgModule = pkgModules.get(mod.id);
+
+        mod.walkParentASTNode(
+          (node, ast) => {
+            let importVars = '';
+            if (node.imported) {
+              for (const imported of node.imported) {
+                if (imported.default || imported.importAll) {
+                  importVars = `default: ${imported.alias || imported.name},`;
+                } else {
+                  if (imported.alias && imported.alias !== imported.name) {
+                    importVars += `${imported.name}: ${imported.alias},`;
+                  } else {
+                    importVars += `${imported.name},`;
+                  }
+                }
+              }
+              if (importVars) {
+                importVars = importVars.slice(0, -1);
+              }
+            }
+
+            let code = '';
+            const requireCode = `${pkgModule.__requireName}('${mod.uid}');`;
+            if (importVars) {
+              code += `const {${importVars}} = ${requireCode}`;
+            } else {
+              code += `${requireCode}`;
+            }
+
+            removeItem(ast, node, createASTNode('', code));
+
+            if (!ast[pkgModule.__requireName]) {
+              ast.unshift(
+                createASTNode(
+                  '',
+                  `import ${pkgModule.__requireName} from '${pkgModule.outpath}';\n`
+                )
+              );
+              ast[pkgModule.__requireName] = true;
+            }
+          },
+          false,
+          (parent) => Boolean(!parent.pkgInfo)
+        );
+      }
+
+      if (!mod.pkgInfo && mod.type === 'script' && mod.dependencis.length) {
+        for (const dep of mod.dependencis) {
+          doTransform(dep);
+        }
+      }
+    }
+  }
+
+  /*
    * register plugin hooks
    */
   applyPlugins() {
@@ -450,11 +628,12 @@ class Pack {
    * write to the disk
    */
   writeContent(modules) {
-    const { output, events, memfs } = this;
     if (!modules) {
-      modules = [...this.modules.values()];
+      return;
     }
     modules = ensureArray(modules);
+
+    const { output, events, memfs } = this;
 
     if (!memfs && !existsSync(output)) {
       mkdirSync(output, { recursive: true });
@@ -529,7 +708,19 @@ class Pack {
 
         this.applyLoaders([mod, ...mod.dependencis]);
 
-        this.writeContent([mod, ...addedModules.values()]);
+        const pkgModule = this.bundlePkgModule(mod);
+        this.transformPkgImport(mod);
+        const modulesToWrite = [mod];
+        if (pkgModule) {
+          modulesToWrite.push(pkgModule);
+        }
+        for (const mod of addedModules.values()) {
+          if (!mod.pkgInfo || mod.type !== 'script') {
+            modulesToWrite.push(mod);
+          }
+          mod.changing = false;
+        }
+        this.writeContent(modulesToWrite);
 
         mod.changing = false;
 
@@ -655,8 +846,10 @@ __global__.process = { env: ${JSON.stringify({
   }
 }
 
+let moduleUID = 0;
 class Module {
   constructor(id) {
+    this.uid = moduleUID++;
     this.id = id;
     this.type = '';
     this.extension = extname(id);
@@ -706,11 +899,15 @@ class Module {
     }
   }
 
-  walkParentASTNode(cb, checkAllNodes = false) {
-    const { parents } = this;
+  walkParentASTNode(cb, checkAllNodes = false, parentFilter) {
+    let { parents } = this;
+    if (parentFilter) {
+      parents = parents.filter(parentFilter);
+    }
     if (!parents.length) {
       return;
     }
+
     for (const parent of parents) {
       if (!parent.changing) {
         continue;

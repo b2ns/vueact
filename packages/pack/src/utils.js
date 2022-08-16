@@ -1,4 +1,4 @@
-import { isBuiltin, changeExtension } from '@vueact/shared/src/node-utils.js';
+import { changeExtension } from '@vueact/shared/src/node-utils.js';
 import { existsSync, statSync } from 'fs';
 import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join } from 'path';
@@ -110,6 +110,37 @@ export function isRequire(code, index) {
   return false;
 }
 
+export function isEnvIf(code, index) {
+  const key = 'process.env.NODE_ENV';
+  let flag = false;
+  if (isTheWord('if', code, index)) {
+    let i = index + 3;
+    while (i < code.length) {
+      const char = code[i];
+      if (flag) {
+        if (char === ')') {
+          return true;
+        }
+        if (char === '&' || char === '|') {
+          return false;
+        }
+        i++;
+        continue;
+      }
+      if (isTheWord(key, code, i)) {
+        flag = true;
+        i += key.length;
+        continue;
+      }
+      if (!isBlank(char) && char !== '!' && char !== '(') {
+        return false;
+      }
+      i++;
+    }
+  }
+  return false;
+}
+
 export function isTheWord(word, code, index) {
   let res = !isWord(code[index - 1] || '');
   if (!res) return res;
@@ -184,11 +215,11 @@ export function handleQuotedCode(sourceCode, index) {
 }
 
 export function resolveModuleImport(sourceCode) {
+  sourceCode = removeEnvCode(sourceCode);
+
   let _isImport = false;
   const ast = [];
   let code = '';
-  const require2Imports = [];
-  const moduleExportNames = [];
 
   function stageOtherCode() {
     if (code) {
@@ -196,8 +227,6 @@ export function resolveModuleImport(sourceCode) {
       code = '';
     }
   }
-
-  let isESM = false;
 
   let i = 0;
   while (i < sourceCode.length) {
@@ -220,10 +249,9 @@ export function resolveModuleImport(sourceCode) {
     }
 
     if ((_isImport = isImport(sourceCode, i)) || isReExport(sourceCode, i)) {
-      isESM = true;
       stageOtherCode();
       const [{ code: rawCode, pathname, imported }, nextIndex] =
-        resolveESImport(sourceCode, i, _isImport ? 'import' : 'export');
+        resolveESMImport(sourceCode, i, _isImport ? 'import' : 'export');
 
       ast.push(
         createASTNode('import', rawCode, {
@@ -237,49 +265,16 @@ export function resolveModuleImport(sourceCode) {
       continue;
     }
 
-    if (!isESM && isExport(sourceCode, i)) {
-      isESM = true;
-    }
-
     if (isRequire(sourceCode, i)) {
       stageOtherCode();
       const [{ code: rawCode, pathname }, nextIndex] = resolveCJSRequire(
         sourceCode,
         i
       );
-      let varName = rawCode;
 
-      if (!require2Imports[pathname]) {
-        if (!isBuiltin(pathname)) {
-          varName = `__pack_require2esm_${pathname.replace(/\W/g, '_')}__`;
-          require2Imports.push(
-            createASTNode('import', `import ${varName} from '${pathname}';\n`, {
-              pathname,
-            })
-          );
-        }
-        require2Imports[pathname] = true;
-      }
-
-      ast.push(createASTNode('', varName));
-
-      i = nextIndex;
-      continue;
-    }
-
-    if (!isESM && isExports(sourceCode, i)) {
-      stageOtherCode();
-      const [{ code: rawCode, varName }, nextIndex] = resovleCJSExports(
-        sourceCode,
-        i
+      ast.push(
+        createASTNode('import', rawCode, { pathname, cjsRequire: true })
       );
-
-      if (varName && !moduleExportNames[varName]) {
-        moduleExportNames.push(varName);
-        moduleExportNames[varName] = true;
-      }
-
-      ast.push(createASTNode('', rawCode));
 
       i = nextIndex;
       continue;
@@ -290,34 +285,45 @@ export function resolveModuleImport(sourceCode) {
   }
   stageOtherCode();
 
-  if (require2Imports.length) {
-    ast.unshift(...require2Imports);
-  }
-
-  if (moduleExportNames.length) {
-    let exportCode = '';
-    for (const varName of moduleExportNames) {
-      exportCode += `export const ${varName} = module.exports.${varName};\n`;
-    }
-    ast.push(createASTNode('', exportCode));
-  }
-
-  // inject helper to load umd or commonjs code
-  if (!isESM) {
-    const head = createASTNode(
-      '',
-      `const module = { exports: {} };
-const exports = module.exports;
-const require = () => {};
-`
-    );
-    const tail = createASTNode('', `export default module.exports;`);
-
-    ast.unshift(head);
-    ast.push(tail);
-  }
-
   return ast;
+}
+
+export function removeEnvCode(sourceCode) {
+  let code = '';
+
+  let i = 0;
+  while (i < sourceCode.length) {
+    const char = sourceCode[i];
+    const nextChar = sourceCode[i + 1];
+
+    if (isComment(char, nextChar)) {
+      const [commentCode, nextIndex] = handleCommentCode(sourceCode, i);
+      code += commentCode;
+      i = nextIndex;
+      continue;
+    }
+
+    if (isQuote(char)) {
+      const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
+      code += quotedCode;
+      i = nextIndex;
+      continue;
+    }
+
+    if (isEnvIf(sourceCode, i)) {
+      const [rawCode, nextIndex] = resolveEnvIf(sourceCode, i);
+
+      code += rawCode;
+
+      i = nextIndex;
+      continue;
+    }
+
+    code += char;
+    i++;
+  }
+
+  return code;
 }
 
 class ASTNode {
@@ -328,7 +334,11 @@ class ASTNode {
 }
 
 class ImportASTNode extends ASTNode {
-  constructor(type, rawCode, { pathname, imported, reExport = false }) {
+  constructor(
+    type,
+    rawCode,
+    { pathname, imported, reExport = false, cjsRequire = false }
+  ) {
     super(type, rawCode);
     this.code = rawCode;
     this.rawPathname = pathname;
@@ -336,6 +346,7 @@ class ImportASTNode extends ASTNode {
     this.absPath = pathname;
     this.imported = imported;
     this.reExport = reExport;
+    this.cjsRequire = cjsRequire;
   }
 
   setPathname(pathname) {
@@ -363,7 +374,7 @@ export function createASTNode(type, rawCode, extra = {}) {
   }
 }
 
-export function resolveESImport(sourceCode, index, keyword) {
+export function resolveESMImport(sourceCode, index, keyword) {
   let code = keyword;
   let pathname = '';
   const imported = [];
@@ -587,6 +598,127 @@ export function resovleCJSExports(sourceCode, index) {
   }
 
   return [{ code, varName }, i];
+}
+
+export function resolveEnvIf(sourceCode, index) {
+  let conditionFlag = false;
+  let condition = '';
+
+  let thenStatementFlag = false;
+  let thenStatement = '';
+
+  let elseStatementFlag = false;
+  let elseStatement = '';
+  let penddingElseStatementFlag = false;
+
+  const parentheseStack = [];
+  const curlyStack = [];
+
+  let i = index;
+  while (i < sourceCode.length) {
+    const char = sourceCode[i];
+    const nextChar = sourceCode[i + 1];
+
+    if (isComment(char, nextChar)) {
+      const [commentCode, nextIndex] = handleCommentCode(sourceCode, i);
+      if (conditionFlag) {
+        condition += commentCode;
+      } else if (thenStatementFlag) {
+        thenStatement += commentCode;
+      } else if (elseStatementFlag) {
+        elseStatement += commentCode;
+      }
+      i = nextIndex;
+      continue;
+    }
+
+    if (isQuote(char)) {
+      const [quotedCode, nextIndex] = handleQuotedCode(sourceCode, i);
+      if (conditionFlag) {
+        condition += quotedCode;
+      } else if (thenStatementFlag) {
+        thenStatement += quotedCode;
+      } else if (elseStatementFlag) {
+        elseStatement += quotedCode;
+      }
+      i = nextIndex;
+      continue;
+    }
+
+    if (conditionFlag) {
+      if (char === '(') {
+        parentheseStack.push(1);
+      } else if (char === ')') {
+        parentheseStack.pop();
+        if (!parentheseStack.length) {
+          conditionFlag = false;
+          thenStatementFlag = true;
+        }
+      }
+      condition += char;
+      i++;
+      continue;
+    }
+
+    if (thenStatementFlag) {
+      if (char === '{') {
+        curlyStack.push(1);
+      } else if (char === '}') {
+        curlyStack.pop();
+        if (!curlyStack.length) {
+          thenStatementFlag = false;
+          penddingElseStatementFlag = true;
+        }
+      }
+      thenStatement += char;
+      i++;
+      continue;
+    }
+
+    if (elseStatementFlag) {
+      if (char === '{') {
+        curlyStack.push(1);
+      } else if (char === '}') {
+        curlyStack.pop();
+        if (!curlyStack.length) {
+          elseStatement += char;
+          elseStatementFlag = false;
+          i++;
+          break;
+        }
+      }
+      elseStatement += char;
+      i++;
+      continue;
+    }
+
+    if (penddingElseStatementFlag) {
+      if (isBlank(char)) {
+        // blank
+      } else if (isTheWord('else', sourceCode, i)) {
+        penddingElseStatementFlag = false;
+        elseStatementFlag = true;
+        i += 4;
+        continue;
+      } else {
+        penddingElseStatementFlag = false;
+        break;
+      }
+    }
+
+    if (char === '(') {
+      conditionFlag = true;
+      continue;
+    }
+
+    i++;
+  }
+
+  // eslint-disable-next-line no-eval
+  let code = (0, eval)(condition) ? thenStatement : elseStatement;
+  code = code.trim();
+
+  return [code, i];
 }
 
 export function genCodeFromAST(ast) {
