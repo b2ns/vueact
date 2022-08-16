@@ -234,9 +234,8 @@ export function resolveModuleImport(sourceCode) {
     const nextChar = sourceCode[i + 1];
 
     if (isComment(char, nextChar)) {
-      stageOtherCode();
       const [commentCode, nextIndex] = handleCommentCode(sourceCode, i);
-      ast.push(createASTNode('comment', commentCode));
+      code += commentCode;
       i = nextIndex;
       continue;
     }
