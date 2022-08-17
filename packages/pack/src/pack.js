@@ -713,7 +713,7 @@ export default __require__;
           return;
         }
 
-        log(`changing: ${filename}`);
+        log(`changing: ${relative(dirname(this.entry), mod.id)}`);
 
         mod.reset();
         this.modules.delete(mod.id);
