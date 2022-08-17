@@ -14,25 +14,11 @@ just for fun 🕹️
 ## features ✨
 
 - Vue
-  - reactivity
-  - composition api
-  - lifecycle hooks
-  - class and style normalize
-  - custom renderer
-- React
-  - JSX
-  - stateful functional component
-  - props.children (i.e., slots in Vue)
-  - render props
-- other lib and tools
-  - JSX parser (extend the React JSX)
-  - assets bundler (no bundling, use native ES modules in the browser) 📦
-
-## todo 🔨
-
-- vueact
-
-  - [ ] watchPostEffect
+  - [x] reactivity
+  - [x] composition api
+  - [x] lifecycle hooks
+  - [ ] class and style normalize
+  - [x] custom renderer
   - [ ] provide, inject
   - [ ] inherit attrs
   - [ ] Fragment
@@ -41,22 +27,28 @@ just for fun 🕹️
   - [ ] custom directives
   - [ ] element ref
   - [ ] KeepAlive
-  - [ ] Teleport (or Portal)
+  - [ ] Teleport (i.e., Portal in React)
   - [ ] defineProps
+- React
+  - [x] JSX
+  - [x] stateful functional component
+  - [x] props.children (i.e., slots in Vue)
+  - [x] render props
+- other lib and tools
 
-- router
+  - JSX parser (extend the React JSX)
+  - assets bundler (no bundling, use native ES modules in the browser) 📦
+    - [x] watch mode
+    - [x] dev server
+    - [x] hmr(i.e., hot module replacement)
+    - [ ] tree-shaking
+    - [x] json loader
+    - [x] assets loader
+    - [x] html plugin
+    - [x] inject renderFactory plugin
+  - router
+  - state managing
 
-- state managing
+## usage
 
-- fetch
-
-- pack
-
-  - [x] inject renderFactory `h` automatically
-  - [x] watch mode
-  - [x] jsonLoader
-  - [x] assetsLoader
-  - [x] htmlPlugin
-  - [x] dev server
-  - [ ] hmr(i.e., hot module replacement)
-  - [ ] tree-shaking
+checkout the [demo code](apps/demo/)
