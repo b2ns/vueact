@@ -118,6 +118,9 @@ class Pack {
         modulesToWrite.push(mod);
       }
     }
+    if (!this.watch) {
+      this.appendHash();
+    }
     this.writeContent(modulesToWrite);
 
     const endTime = process.hrtime(startTime);
@@ -151,8 +154,7 @@ class Pack {
    */
   resolveDependencis(entry = this.entry, extra = {}) {
     const that = this;
-    const { modules, events, root, resolveOpts, target, watch, _resolvedPKG } =
-      this;
+    const { modules, events, root, resolveOpts, target, _resolvedPKG } = this;
     const { extensions, alias } = resolveOpts;
 
     const graph = doResolve(entry, null, null);
@@ -196,9 +198,6 @@ class Pack {
       } else {
         mod.outpath = relative(root, id);
         mod.hash = hash(content);
-        if (!watch) {
-          mod.outpath = mod.outpath.replace(/\.(\w+)$/, `_${mod.hash}.$1`);
-        }
       }
 
       events.emit('moduleCreated', that.injectHelper({ mod }));
@@ -357,15 +356,6 @@ class Pack {
           mod.dependencis.push(
             doResolve(node.absPath, mod, _pkgInfo || pkgInfo)
           );
-
-          const nodeMod = modules.get(node.absPath);
-          if (!watch) {
-            if (nodeMod.hash) {
-              node.setPathname(
-                node.pathname.replace(/\.(\w+)$/, `_${nodeMod.hash}.$1`)
-              );
-            }
-          }
         }
 
         events.emit('moduleResolved', that.injectHelper({ mod }));
@@ -523,10 +513,10 @@ function __require__(moduleId) {
 export default __require__;
 `;
 
-    const pathname = `/.pack/__pack_pkg_bundle_${pkgBundleUID}_${hash(
-      content
-    )}.js`;
+    const hashCode = hash(content);
+    const pathname = `/.pack/__pack_pkg_bundle_${pkgBundleUID}_${hashCode}.js`;
     const pkgModule = createModule(pathname);
+    pkgModule.hash = hashCode;
     pkgModule.outpath = pathname;
     pkgModule.content = content;
     pkgModule.__requireName = `__pack_pkg_require_${pkgBundleUID}__`;
@@ -623,6 +613,33 @@ export default __require__;
         plugin = registerPlugins[plugin];
       }
       plugin(this.injectHelper({ events }, false), opts);
+    }
+  }
+
+  /*
+   * append filename with content hash
+   */
+  appendHash() {
+    const handled = new Set();
+    doAppend(this.graph);
+
+    function doAppend(mod) {
+      if (handled.has(mod.id) || mod.pkgInfo || !/\.js$/.test(mod.outpath)) {
+        return;
+      }
+      handled.add(mod.id);
+
+      if (mod.dependencis.length) {
+        for (const dep of mod.dependencis) {
+          doAppend(dep);
+        }
+      }
+
+      const hashCode = hash(mod.ast ? genCodeFromAST(mod.ast) : mod.content);
+      mod.outpath = mod.outpath.replace(/\.(\w+)$/, `_${hashCode}.$1`);
+      mod.walkParentASTNode((node) => {
+        node.setPathname(node.pathname.replace(/\.(\w+)$/, `_${hashCode}.$1`));
+      });
     }
   }
 
