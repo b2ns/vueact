@@ -745,7 +745,7 @@ export default __require__;
 
         if (mod.type === 'style') {
           updates.push({ type: 'style', id: mod.id, content: mod.content });
-        } else if (mod.type === 'script') {
+        } else if (mod.type === 'script' || mod.extension === '.json') {
           const outpath = ensurePathPrefix(mod.outpath) + `?hash=${mod.hash}`;
           updates.push({
             type: 'js',
