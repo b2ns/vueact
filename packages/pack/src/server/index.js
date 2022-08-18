@@ -1,3 +1,4 @@
+import EventEmitter from 'node:events';
 import { createServer, STATUS_CODES } from 'node:http';
 import { createSecureServer } from 'node:http2';
 import { WebSocketServer } from 'ws';
@@ -8,8 +9,10 @@ import staticAssets from './middlewares/staticAssets.js';
 const HOST = 'localhost';
 const PORT = 8080;
 
-export default class PackServer {
+export default class PackServer extends EventEmitter {
   constructor(config = {}) {
+    super();
+
     this.config = config;
     this.middlewares = [];
 
@@ -54,6 +57,7 @@ export default class PackServer {
     });
 
     this.httpServer.once('listening', () => {
+      this.emit('start', this);
       console.log(`
 listening ...
   ${this.origin}

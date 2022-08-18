@@ -105,10 +105,9 @@ class Pack {
   run() {
     // only start the server while preview
     if (this.preview) {
-      const app = this.startServer();
-      app.httpServer.once('listening', () => {
+      this.startServer().once('start', ({ origin }) => {
         if (this.open) {
-          openBrowser(app.origin);
+          openBrowser(origin);
         }
       });
       return;
@@ -157,19 +156,17 @@ class Pack {
 
       this.doWatch();
 
-      const app = this.startServer();
-      app.httpServer.once('listening', () => {
+      this.app = this.startServer().once('start', ({ origin }) => {
         this.injectGlobalCode({
-          'env.SOCKET_ORIGIN': app.origin.replace(/^http/, 'ws'),
+          'env.SOCKET_ORIGIN': origin.replace(/^http/, 'ws'),
         });
 
         this.events.emit('end', this.injectHelper());
 
         if (this.open) {
-          openBrowser(app.origin);
+          openBrowser(origin);
         }
       });
-      this.app = app;
     } else {
       this.events.emit('end', this.injectHelper());
     }
