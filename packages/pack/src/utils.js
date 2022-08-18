@@ -1,4 +1,4 @@
-import { changeExtension } from '@vueact/shared/src/node-utils.js';
+import { changeExtension, open } from '@vueact/shared/src/node-utils.js';
 import { existsSync, statSync } from 'fs';
 import { createRequire } from 'module';
 import { dirname, extname, isAbsolute, join } from 'path';
@@ -889,4 +889,8 @@ export class Memfs {
     }
     return null;
   }
+}
+
+export function openBrowser(url) {
+  open(url);
 }

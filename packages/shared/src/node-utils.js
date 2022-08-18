@@ -1,3 +1,4 @@
+import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { readdirSync, statSync, watch } from 'fs';
 import { builtinModules } from 'module';
@@ -77,4 +78,10 @@ export function changeExtension(pathname, ext) {
   }
 
   return `${pathname}${ext}`;
+}
+
+export function open(url, opts) {
+  if (isLinux) {
+    return spawn('xdg-open', [url], opts);
+  }
 }

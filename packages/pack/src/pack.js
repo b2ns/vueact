@@ -36,6 +36,7 @@ import {
   resolveModuleImport,
   shouldResolveModule,
   Memfs,
+  openBrowser,
 } from './utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,6 +58,7 @@ class Pack {
     define = {},
     preview = false,
     server = {},
+    open = false,
   }) {
     this.root = resolve(root);
     this.entry = resolve(this.root, entry);
@@ -69,6 +71,7 @@ class Pack {
     this.define = define;
     this.preview = preview;
     this.server = server;
+    this.open = open;
 
     this.modules = new Map();
     this.graph = null;
@@ -95,7 +98,12 @@ class Pack {
   run() {
     // only start the server while preview
     if (this.preview) {
-      this.startServer();
+      const app = this.startServer();
+      app.httpServer.once('listening', () => {
+        if (this.open) {
+          openBrowser(app.origin);
+        }
+      });
       return;
     }
 
@@ -142,6 +150,10 @@ class Pack {
         });
 
         this.events.emit('end', this.injectHelper());
+
+        if (this.open) {
+          openBrowser(app.origin);
+        }
       });
       this.app = app;
     } else {
