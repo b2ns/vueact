@@ -114,7 +114,7 @@ class Pack {
       return;
     }
 
-    const startTime = process.hrtime();
+    const startTime = Date.now();
 
     this.applyPlugins();
 
@@ -138,9 +138,16 @@ class Pack {
     }
     this.writeContent(modulesToWrite);
 
-    const endTime = process.hrtime(startTime);
+    const endTime = Date.now();
 
-    log(`build done: ${endTime[0] + endTime[1] / 1e9} s`);
+    let buildTime = endTime - startTime;
+    if (buildTime > 1000) {
+      buildTime = (buildTime / 1000).toFixed(2) + ' s';
+    } else {
+      buildTime = buildTime + ' ms';
+    }
+
+    log(`build done: ${buildTime}`);
 
     if (this.watch) {
       // set all modules to unchanged
