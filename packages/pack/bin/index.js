@@ -1,5 +1,5 @@
-import { existsSync } from 'fs';
-import { dirname, join } from 'path';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import pack from '../index.js';
 import { isDef, parseArgs } from '../src/utils.js';
 

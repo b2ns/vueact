@@ -1,14 +1,21 @@
-import EventEmitter from 'events';
+import EventEmitter from 'node:events';
 import {
   copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
   writeFileSync,
-} from 'fs';
-import { createRequire } from 'module';
-import { dirname, extname, isAbsolute, join, relative, resolve } from 'path';
-import { fileURLToPath } from 'url';
+} from 'node:fs';
+import { createRequire } from 'node:module';
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from 'node:path';
+import { fileURLToPath } from 'node:url';
 import registerLoaders from './loaders/index.js';
 import registerPlugins from './plugins/index.js';
 import PackServer from './server/index.js';

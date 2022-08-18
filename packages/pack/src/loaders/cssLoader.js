@@ -1,5 +1,5 @@
 import { escape } from '@vueact/shared';
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import { createASTNode, removeItem } from '../utils.js';
 
 export default ({ mod, watch, shared }) => {

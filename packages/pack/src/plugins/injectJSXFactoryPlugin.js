@@ -1,4 +1,4 @@
-import { extname } from 'path';
+import { extname } from 'node:path';
 
 export default ({ events }, { factoryName = 'h', libName = 'vueact' } = {}) => {
   events.on('beforeModuleResolve', ({ mod }) => {

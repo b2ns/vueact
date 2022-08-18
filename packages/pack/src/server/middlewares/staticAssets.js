@@ -1,5 +1,5 @@
-import { createReadStream, existsSync, statSync } from 'fs';
-import { extname, join, resolve } from 'path';
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
 import { MIME_TYPES, isTextType } from '../utils.js';
 
 export default (dir, opts = {}) => {

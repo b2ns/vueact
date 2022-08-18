@@ -1,7 +1,7 @@
 import { changeExtension, open } from '@vueact/shared/src/node-utils.js';
-import { existsSync, statSync } from 'fs';
-import { createRequire } from 'module';
-import { dirname, extname, isAbsolute, join } from 'path';
+import { existsSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, extname, isAbsolute, join } from 'node:path';
 export * from '@vueact/shared';
 export * from '@vueact/shared/src/node-utils.js';
 const require = createRequire(import.meta.url);

@@ -1,9 +1,9 @@
-import { spawn } from 'child_process';
-import { createHash } from 'crypto';
-import { readdirSync, statSync, watch } from 'fs';
-import { builtinModules } from 'module';
-import os from 'os';
-import { join, extname } from 'path';
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readdirSync, statSync, watch } from 'node:fs';
+import { builtinModules } from 'node:module';
+import os from 'node:os';
+import { join, extname } from 'node:path';
 
 export const isLinux = os.type() === 'Linux';
 export const isMac = os.type() === 'Darwin';

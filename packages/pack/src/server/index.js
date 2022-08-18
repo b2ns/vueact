@@ -1,5 +1,5 @@
-import { createServer, STATUS_CODES } from 'http';
-import { createSecureServer } from 'http2';
+import { createServer, STATUS_CODES } from 'node:http';
+import { createSecureServer } from 'node:http2';
 import { WebSocketServer } from 'ws';
 import { isObject, isUndef } from '../utils.js';
 import preprocessMiddleware from './middlewares/preprocess.js';

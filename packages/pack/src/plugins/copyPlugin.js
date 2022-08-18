@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { ensureArray } from '../utils.js';
 
 export default ({ events }, opts) => {
