@@ -2,13 +2,13 @@ import { escape } from '@vueact/shared';
 import { readFileSync } from 'node:fs';
 import { createASTNode, removeItem } from '../utils.js';
 
-export default ({ mod, watch, shared }) => {
-  if (watch) {
+export default ({ mod, dev, shared }) => {
+  if (dev) {
     mod.changeExtension('.css.js');
     if (mod.changing) {
       mod.type = 'style';
       const escapedCnt = escape(readFileSync(mod.id, 'utf-8'), '`\\');
-      mod.content = escapedCnt;
+      mod.raw = escapedCnt;
       mod.ast = [
         createASTNode(
           '',
@@ -28,6 +28,6 @@ export default css;\n`
     if (!shared.CSS_CODE) {
       shared.CSS_CODE = '';
     }
-    shared.CSS_CODE += readFileSync(mod.id, { encoding: 'utf-8' });
+    shared.CSS_CODE += readFileSync(mod.id, 'utf-8');
   }
 };

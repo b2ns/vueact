@@ -28,7 +28,7 @@ export default (
   // inject defined variable into template
   tpl = tpl.replace(/<%= (\S*) %>/g, (_, p1) => define[p1] || '');
 
-  events.on('end', ({ output, graph, shared, memfs }) => {
+  events.on('end', ({ output, shared, memfs, chunks }) => {
     const filepath = join(output, filename);
     const dir = dirname(filepath);
     if (!memfs && !existsSync(dir)) {
@@ -40,7 +40,7 @@ export default (
     // inject css code from css-loader
     if (shared.CSS_CODE) {
       const hashCode = hash(shared.CSS_CODE);
-      const styleFilename = `__pack_style__${hashCode}.css`;
+      const styleFilename = `__style_${hashCode}.css`;
       writeFileSync(join(dir, styleFilename), shared.CSS_CODE);
       code = code.replace(
         /<\/head>/g,
@@ -49,10 +49,10 @@ export default (
     }
 
     // inject global script
-    if (shared.GLOBAL_SCRIPT) {
+    if (shared.GLOBAL_RUNTIME) {
       code = code.replace(
         /<\/head>/g,
-        `<script>\n${shared.GLOBAL_SCRIPT}</script>\n</head>`
+        `<script>\n${shared.GLOBAL_RUNTIME}\n</script>\n</head>`
       );
     }
 
@@ -61,7 +61,7 @@ export default (
       /<\/body>/g,
       `<script type="module" src="${relative(
         dir,
-        join(output, graph.outpath)
+        join(output, chunks.root.outpath)
       )}"></script>\n</body>`
     );
 

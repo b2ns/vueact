@@ -6,7 +6,6 @@ export default ({ events }, { factoryName = 'h', libName = 'vueact' } = {}) => {
       return;
     }
 
-    mod.content =
-      `import { ${factoryName} } from '${libName}';\n` + mod.content;
+    mod.raw = `import { ${factoryName} } from '${libName}';\n` + mod.raw;
   });
 };
