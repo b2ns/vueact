@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { createModule } from '../module.js';
+import { get__dirname } from '../utils.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = get__dirname(import.meta.url);
 
 export default function createInjectClientLoader() {
   const code = readFileSync(join(__dirname, '../client/index.js'));

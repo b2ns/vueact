@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { readdirSync, statSync, watch } from 'node:fs';
 import { builtinModules } from 'node:module';
 import os from 'node:os';
-import { join, extname } from 'node:path';
+import { dirname, extname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const isLinux = os.type() === 'Linux';
 export const isMac = os.type() === 'Darwin';
@@ -85,3 +86,5 @@ export function open(url, opts) {
     return spawn('xdg-open', [url], opts);
   }
 }
+
+export const get__dirname = (metaURL) => dirname(fileURLToPath(metaURL));

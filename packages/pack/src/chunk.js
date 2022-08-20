@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createASTNode, hash, removeItem } from './utils.js';
+import { join } from 'node:path';
+import { createASTNode, hash, removeItem, get__dirname } from './utils.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = get__dirname(import.meta.url);
 const moduleWrapperCode = readFileSync(
   join(__dirname, './client/moduleWrapper.js'),
   'utf-8'
