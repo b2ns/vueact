@@ -63,7 +63,7 @@ class Pack {
 
     this.events = new EventEmitter();
 
-    // use im-memory files in development mode
+    // use in-memory files in development mode
     this.memfs = this.dev ? new Memfs() : null;
 
     // loader and plugin shared data
@@ -307,7 +307,6 @@ class Pack {
         this.resolveModuleGraph(mod, {
           addedModules,
         });
-        // addedModules.delete(mod.id);
 
         this.applyLoaders([mod, ...mod.dependencis]);
 

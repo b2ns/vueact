@@ -8,7 +8,7 @@ const HTML_TPL = `<!DOCTYPE html>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title><%= html.title %></title>
+    <title>{{ html.title }}</title>
   </head>
   <body>
     <div id="app"></div>
@@ -26,7 +26,7 @@ export default (
   }
 
   // inject defined variable into template
-  tpl = tpl.replace(/<%= (\S*) %>/g, (_, p1) => define[p1] || '');
+  tpl = tpl.replace(/{{ *(\S*) *}}/g, (_, p1) => define[p1] || '');
 
   events.on('end', ({ output, shared, memfs, chunks }) => {
     const filepath = join(output, filename);
