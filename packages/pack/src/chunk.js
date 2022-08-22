@@ -52,7 +52,7 @@ export class Chunk {
 
     let content = '';
     for (const mod of this._modules) {
-      if (mod.noWrite || mod.type === 'assets') {
+      if (mod.type === 'assets') {
         continue;
       }
       content += mod.content;
@@ -260,9 +260,11 @@ export function splitChunks(moduleRoot, { addedModules, appendHash = false }) {
       }
       pkgChunk.add(mod);
     } else {
-      const chunk = new Chunk(mod.id, mod.outpath, appendHash);
-      chunk.add(mod);
-      chunks.add(chunk);
+      if (!mod.noWrite) {
+        const chunk = new Chunk(mod.id, mod.outpath, appendHash);
+        chunk.add(mod);
+        chunks.add(chunk);
+      }
     }
 
     if (!mod.isPkg) {
