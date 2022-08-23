@@ -1,3 +1,5 @@
+import './Hello.css';
+
 export default (props) => () =>
   (
     <div class="hello-box">

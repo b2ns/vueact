@@ -5,8 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "pack --watch",
-    "build": "pack",
+    "dev": "pack --mode=development --open",
+    "build": "pnpm clear && pack",
+    "preview": "pack --preview --open",
     "clear": "rm -rf dist"
   },
   "keywords": [],

@@ -1,43 +1,39 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  jsxLoader,
-  cssLoader,
-  styleLoader,
-  copyPlugin,
-  injectJSXFactoryPlugin,
-} from '@vueact/pack';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const r = (p = './') => resolve(__dirname, p);
 
 export default {
   root: r(),
-  entry: './src/main.js',
-  output: './dist',
+  entry: 'src/main.js',
+  output: 'dist',
   resolve: {
     alias: {
-      // '#': './src',
+      '@/': './src/',
     },
   },
   loaders: [
     {
       test: /\.css$/,
-      use: [styleLoader, cssLoader],
-    },
-    {
-      test: /\.js$/,
-      exclude: [/node_modules/],
-      use: [],
+      use: ['css-loader'],
     },
     {
       test: /\.jsx$/,
-      exclude: [/node_modules/],
-      use: [jsxLoader],
+      exclude: /node_modules/,
+      use: ['jsx-loader'],
     },
   ],
   plugins: [
-    [copyPlugin, { from: r('./index.html'), to: r('./dist/index.html') }],
-    injectJSXFactoryPlugin,
+    [
+      'html-plugin',
+      {
+        template: r('./index.html'),
+        define: {
+          title: 'vueact-demo',
+        },
+      },
+    ],
+    'inject-jsx-factory-plugin',
   ],
 };
