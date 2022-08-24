@@ -247,27 +247,31 @@ export function splitChunks(moduleRoot, { addedModules, appendHash = false }) {
     const isAdded = !addedModules || addedModules.has(mod.id);
 
     if (!isAdded) {
-      if (mod.isPkgScript) {
+      if (mod.isPkgScript && mod.isCJS) {
         const loadedPkgChunk = PkgChunk.pkgChunkMap.get(mod.id);
         PkgChunk.transformParent(mod, loadedPkgChunk, loadedPkgChunk.outpath);
       }
       return;
     }
 
-    if (mod.isPkgScript) {
+    if (mod.isPkgScript && mod.isCJS) {
       if (!pkgChunk) {
         pkgChunk = new PkgChunk(appendHash);
       }
       pkgChunk.add(mod);
     } else {
       if (!mod.noWrite) {
-        const chunk = new Chunk(mod.id, mod.outpath, appendHash);
+        const chunk = new Chunk(
+          mod.id,
+          mod.outpath,
+          mod.isPkgScript && !mod.isCJS ? false : appendHash
+        );
         chunk.add(mod);
         chunks.add(chunk);
       }
     }
 
-    if (!mod.isPkg) {
+    if (!mod.isPkg || (mod.isPkg && !mod.isCJS)) {
       for (const dep of mod.dependencis) {
         doSplit(dep);
       }

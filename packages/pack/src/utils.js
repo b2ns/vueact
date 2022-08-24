@@ -220,6 +220,7 @@ export function resolveModuleImport(sourceCode) {
   let _isImport = false;
   const ast = [];
   let code = '';
+  let isCJS = true;
 
   function stageOtherCode() {
     if (code) {
@@ -248,6 +249,7 @@ export function resolveModuleImport(sourceCode) {
     }
 
     if ((_isImport = isImport(sourceCode, i)) || isReExport(sourceCode, i)) {
+      isCJS = false;
       stageOtherCode();
       const [{ code: rawCode, pathname, imported }, nextIndex] =
         resolveESMImport(sourceCode, i, _isImport ? 'import' : 'export');
@@ -264,6 +266,10 @@ export function resolveModuleImport(sourceCode) {
       continue;
     }
 
+    if (isCJS && isExport(sourceCode, i)) {
+      isCJS = false;
+    }
+
     if (isRequire(sourceCode, i)) {
       stageOtherCode();
       const [{ code: rawCode, pathname }, nextIndex] = resolveCJSRequire(
@@ -271,9 +277,7 @@ export function resolveModuleImport(sourceCode) {
         i
       );
 
-      ast.push(
-        createASTNode('import', rawCode, { pathname, cjsRequire: true })
-      );
+      ast.push(createASTNode('import', rawCode, { pathname }));
 
       i = nextIndex;
       continue;
@@ -284,7 +288,7 @@ export function resolveModuleImport(sourceCode) {
   }
   stageOtherCode();
 
-  return ast;
+  return { ast, isCJS };
 }
 
 export function removeEnvCode(sourceCode) {
@@ -333,11 +337,7 @@ class ASTNode {
 }
 
 class ImportASTNode extends ASTNode {
-  constructor(
-    type,
-    rawCode,
-    { pathname, imported, reExport = false, cjsRequire = false }
-  ) {
+  constructor(type, rawCode, { pathname, imported, reExport = false }) {
     super(type, rawCode);
     this.code = rawCode;
     this.rawPathname = pathname;
@@ -345,7 +345,6 @@ class ImportASTNode extends ASTNode {
     this.absPath = pathname;
     this.imported = imported;
     this.reExport = reExport;
-    this.cjsRequire = cjsRequire;
   }
 
   setPathname(pathname) {

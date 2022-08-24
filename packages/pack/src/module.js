@@ -38,6 +38,7 @@ export class Module {
     this.isRoot = false;
     this.injectedHMR = false;
     this.changing = true;
+    this.isCJS = false;
   }
 
   get isPkg() {
@@ -67,6 +68,7 @@ export class Module {
     this.hash = '';
     this.injectedHMR = false;
     this.changing = true;
+    this.isCJS = false;
   }
 
   changeExtension(ext) {
@@ -249,8 +251,9 @@ export class ModuleGraph {
 
         mod.raw = raw.toString();
         emit('beforeModuleResolve', { mod });
-        const ast = resolveModuleImport(mod.raw);
+        const { ast, isCJS } = resolveModuleImport(mod.raw);
         mod.ast = ast;
+        mod.isCJS = isCJS;
         mod.raw = '';
 
         for (const node of ast) {
@@ -395,7 +398,7 @@ export class ModuleGraph {
       return mod;
     };
 
-    const res = doResolve(entry, null, null);
+    const res = doResolve(entry);
 
     if (extra.setRoot) {
       this.root = res;
