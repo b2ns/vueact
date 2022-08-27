@@ -1,5 +1,11 @@
+import {
+  hasChanged,
+  hasOwn,
+  isArray,
+  isFunction,
+  isObject,
+} from '@vueact/shared';
 import { queuePostFlushCb, queuePreFlushCb } from './scheduler.js';
-import { isArray, isObject, hasChanged, isFunction } from '@vueact/shared';
 
 /*
  * reactive
@@ -8,6 +14,8 @@ export const ReactiveFlags = {
   IS_REACTIVE: '__v_isReactive',
   RAW: '__v_raw',
 };
+
+export const ITERATE_KEY = Symbol();
 
 const reactiveMap = new WeakMap();
 
@@ -63,20 +71,39 @@ function createHandlers() {
       return res;
     },
     set(target, key, value, receiver) {
-      const oldVal = Reflect.get(target, key);
+      const oldValue = Reflect.get(target, key);
 
-      if (isRef(oldVal) && !isRef(value)) {
-        oldVal.value = value;
+      if (isRef(oldValue) && !isRef(value)) {
+        oldValue.value = value;
         return true;
       }
 
       const res = Reflect.set(target, key, value, receiver);
 
-      if (hasChanged(oldVal, value)) {
-        trigger(target, key);
+      if (target === toRaw(receiver)) {
+        if (hasChanged(oldValue, value)) {
+          trigger(target, key);
+        }
       }
 
       return res;
+    },
+    deleteProperty(target, key) {
+      const hadKey = hasOwn(target, key);
+      const res = Reflect.deleteProperty(target, key);
+      if (res && hadKey) {
+        trigger(target, key);
+      }
+      return res;
+    },
+    has(target, key) {
+      const res = Reflect.has(target, key);
+      track(target, key);
+      return res;
+    },
+    ownKeys(target) {
+      track(target, isArray(target) ? 'length' : ITERATE_KEY);
+      return Reflect.ownKeys(target);
     },
   };
   return handlers;
