@@ -12,7 +12,6 @@ export default function App(props) {
       </header>
       <main class="app-main">
         <Main />
-        <hr />
         <About />
       </main>
       <footer class="app-footer" innerHTML={footer}></footer>

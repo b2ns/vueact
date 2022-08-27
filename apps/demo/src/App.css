@@ -1,11 +1,6 @@
 .app-box {
   margin: 20px;
   padding: 20px;
-  background-color: #efefef;
-  transition: all 200ms;
-}
-.app-box:hover {
-  box-shadow: 0 0 10px #ccc;
 }
 .app-main {
   margin: 20px 0;

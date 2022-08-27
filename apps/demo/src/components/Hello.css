@@ -1,10 +1,8 @@
 .hello-box {
-  margin: 4px;
-  padding: 4px;
-  border: 1px solid rgb(13, 90, 198);
+  padding: 4px 10px;
+  border: 1px solid #d9d9d9
 }
 
 .hello-name {
-  color: yellowgreen;
   font-size: 30px;
 }
