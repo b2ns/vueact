@@ -365,7 +365,7 @@ function triggerEffect(effect) {
  * ref
  */
 export function ref(value) {
-  return createRef(value, false);
+  return createRef(value);
 }
 
 function createRef(rawValue) {
@@ -380,7 +380,7 @@ class RefImpl {
 
   _rawValue;
 
-  dep = void 0;
+  dep;
 
   __v_isRef = true;
 
@@ -466,7 +466,7 @@ export function computed(getter) {
 }
 
 export class ComputedRefImpl {
-  dep = void 0;
+  dep;
 
   effect;
 
@@ -488,12 +488,13 @@ export class ComputedRefImpl {
   }
 
   get value() {
-    trackRefValue(this);
-    if (this._dirty) {
-      this._dirty = false;
-      this._value = this.effect.run();
+    const self = toRaw(this);
+    trackRefValue(self);
+    if (self._dirty) {
+      self._dirty = false;
+      self._value = self.effect.run();
     }
-    return this._value;
+    return self._value;
   }
 }
 
