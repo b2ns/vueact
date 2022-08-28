@@ -29,6 +29,10 @@ export const isArray = (val) => Array.isArray(val);
 
 export const isFunction = (val) => typeof val === 'function';
 
+export const isSet = (val) => type(val) === 'Set';
+
+export const isMap = (val) => type(val) === 'Map';
+
 export const hasChanged = (value, oldValue) => !Object.is(value, oldValue);
 
 export const hasOwn = (val, key) =>

@@ -4,9 +4,13 @@ import {
   isArray,
   isFunction,
   isIntegerKey,
+  isMap,
   isObject,
+  isPlainObject,
+  isSet,
+  NOOP,
 } from '@vueact/shared';
-import { queuePostFlushCb, queuePreFlushCb } from './scheduler.js';
+import { queueJob, queuePostFlushCb } from './scheduler.js';
 
 /*
  * reactive
@@ -14,6 +18,7 @@ import { queuePostFlushCb, queuePreFlushCb } from './scheduler.js';
 export const ReactiveFlags = {
   IS_REACTIVE: '__v_isReactive',
   RAW: '__v_raw',
+  SKIP: '__v_skip',
 };
 export const TrackTypes = {
   GET: 'get',
@@ -507,30 +512,85 @@ export function watchEffect(effect, opts) {
 }
 
 const INITIAL_WATCHER_VALUE = {};
-function doWatch(source, cb, { immediate, flush } = {}) {
-  let oldVal = INITIAL_WATCHER_VALUE;
-
+function doWatch(source, cb, { immediate, flush, deep } = {}) {
   let getter;
+  let forceTrigger = false;
+  let isMultiSource = false;
+
   if (isRef(source)) {
     getter = () => source.value;
   } else if (isReactive(source)) {
     getter = () => source;
+    deep = true;
+  } else if (isArray(source)) {
+    isMultiSource = true;
+    forceTrigger = source.some((s) => isReactive(s));
+    getter = () =>
+      source.map((s) => {
+        if (isRef(s)) {
+          return s.value;
+        } else if (isReactive(s)) {
+          return traverse(s);
+        } else if (isFunction(s)) {
+          return s();
+        }
+      });
   } else if (isFunction(source)) {
-    getter = () => source();
+    if (cb) {
+      getter = () => source();
+    } else {
+      getter = () => {
+        if (cleanup) {
+          cleanup();
+        }
+        return source(onCleanup);
+      };
+    }
+  } else {
+    getter = NOOP;
   }
 
+  if (cb && deep) {
+    const baseGetter = getter;
+    getter = () => traverse(baseGetter());
+  }
+
+  let cleanup;
+  let onCleanup = (fn) => {
+    cleanup = effect.onStop = () => {
+      fn();
+    };
+  };
+
+  let oldVal = isMultiSource ? [] : INITIAL_WATCHER_VALUE;
   const job = () => {
     if (!effect.active) {
       return;
     }
     if (cb) {
       const newVal = effect.run();
-      cb(newVal, oldVal === INITIAL_WATCHER_VALUE ? void 0 : oldVal);
-      oldVal = newVal;
+      if (
+        deep ||
+        forceTrigger ||
+        (isMultiSource
+          ? newVal.some((v, i) => hasChanged(v, oldVal[i]))
+          : hasChanged(newVal, oldVal))
+      ) {
+        if (cleanup) {
+          cleanup();
+        }
+        cb(
+          newVal,
+          oldVal === INITIAL_WATCHER_VALUE ? void 0 : oldVal,
+          onCleanup
+        );
+        oldVal = newVal;
+      }
     } else {
       effect.run();
     }
   };
+  job.allowRecurse = Boolean(cb);
 
   let scheduler;
   if (flush === 'sync') {
@@ -538,7 +598,9 @@ function doWatch(source, cb, { immediate, flush } = {}) {
   } else if (flush === 'post') {
     scheduler = () => queuePostFlushCb(job);
   } else {
-    scheduler = () => queuePreFlushCb(job);
+    // default: 'pre'
+    job.pre = true;
+    scheduler = () => queueJob(job);
   }
 
   const effect = new ReactiveEffect(getter, scheduler);
@@ -554,4 +616,32 @@ function doWatch(source, cb, { immediate, flush } = {}) {
   return () => {
     effect.stop();
   };
+}
+
+function traverse(value, seen) {
+  if (!isObject(value) || value[ReactiveFlags.SKIP]) {
+    return value;
+  }
+  seen = seen || new Set();
+  if (seen.has(value)) {
+    return value;
+  }
+  seen.add(value);
+
+  if (isRef(value)) {
+    traverse(value.value, seen);
+  } else if (isArray(value)) {
+    for (const val of value) {
+      traverse(val, seen);
+    }
+  } else if (isSet(value) || isMap(value)) {
+    value.forEach((v) => {
+      traverse(v, seen);
+    });
+  } else if (isPlainObject(value)) {
+    for (const key in value) {
+      traverse(value[key], seen);
+    }
+  }
+  return value;
 }
