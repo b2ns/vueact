@@ -3,6 +3,7 @@ import {
   hasOwn,
   isArray,
   isFunction,
+  isIntegerKey,
   isObject,
 } from '@vueact/shared';
 import { queuePostFlushCb, queuePreFlushCb } from './scheduler.js';
@@ -13,6 +14,16 @@ import { queuePostFlushCb, queuePreFlushCb } from './scheduler.js';
 export const ReactiveFlags = {
   IS_REACTIVE: '__v_isReactive',
   RAW: '__v_raw',
+};
+export const TrackTypes = {
+  GET: 'get',
+  HAS: 'has',
+  ITERATE: 'iterate',
+};
+export const TriggerTypes = {
+  SET: 'set',
+  ADD: 'add',
+  DELETE: 'delete',
 };
 
 export const ITERATE_KEY = Symbol();
@@ -58,7 +69,7 @@ function createHandlers() {
 
       const res = Reflect.get(target, key, receiver);
 
-      track(target, key);
+      track(target, TrackTypes.GET, key);
 
       if (isRef(res)) {
         return res.value;
@@ -78,11 +89,18 @@ function createHandlers() {
         return true;
       }
 
+      const hadKey =
+        isArray(target) && isIntegerKey(key)
+          ? Number(key) < target.length
+          : hasOwn(target, key);
+
       const res = Reflect.set(target, key, value, receiver);
 
       if (target === toRaw(receiver)) {
-        if (hasChanged(oldValue, value)) {
-          trigger(target, key);
+        if (!hadKey) {
+          trigger(target, TriggerTypes.ADD, key, value);
+        } else if (hasChanged(oldValue, value)) {
+          trigger(target, TriggerTypes.SET, key, value);
         }
       }
 
@@ -92,17 +110,21 @@ function createHandlers() {
       const hadKey = hasOwn(target, key);
       const res = Reflect.deleteProperty(target, key);
       if (res && hadKey) {
-        trigger(target, key);
+        trigger(target, TriggerTypes.DELETE, key, void 0);
       }
       return res;
     },
     has(target, key) {
       const res = Reflect.has(target, key);
-      track(target, key);
+      track(target, TrackTypes.HAS, key);
       return res;
     },
     ownKeys(target) {
-      track(target, isArray(target) ? 'length' : ITERATE_KEY);
+      track(
+        target,
+        TrackTypes.ITERATE,
+        isArray(target) ? 'length' : ITERATE_KEY
+      );
       return Reflect.ownKeys(target);
     },
   };
@@ -130,8 +152,6 @@ export function isProxy(value) {
  */
 export const createDep = (effects) => {
   const dep = new Set(effects);
-  // dep.w = 0;
-  // dep.n = 0;
   return dep;
 };
 
@@ -148,12 +168,15 @@ export class ReactiveEffect {
 
   deps = [];
 
-  parent = void 0;
+  parent = null;
 
-  computed = void 0;
-  // allowRecurse = false;
+  computed = null;
+
+  allowRecurse = false;
 
   deferStop = false;
+
+  onStop = null;
 
   constructor(fn, scheduler) {
     this.fn = fn;
@@ -184,7 +207,7 @@ export class ReactiveEffect {
     } finally {
       activeEffect = this.parent;
       shouldTrack = lastShouldTrack;
-      this.parent = void 0;
+      this.parent = null;
 
       if (this.deferStop) {
         this.stop();
@@ -197,6 +220,9 @@ export class ReactiveEffect {
       this.deferStop = true;
     } else if (this.active) {
       cleanupEffect(this);
+      if (this.onStop) {
+        this.onStop();
+      }
       this.active = false;
     }
   }
@@ -211,6 +237,10 @@ function cleanupEffect(effect) {
 }
 
 export function effect(fn, opts = {}) {
+  if (fn.effect?.fn) {
+    fn = fn.effect.fn;
+  }
+
   const _effect = new ReactiveEffect(fn);
   Object.assign(_effect, opts);
   if (!opts.lazy) {
@@ -240,7 +270,7 @@ export function resetTracking() {
   shouldTrack = last === void 0 ? true : last;
 }
 
-export function track(target, key) {
+export function track(target, type, key) {
   if (shouldTrack && activeEffect) {
     let depsMap = targetMap.get(target);
     if (!depsMap) {
@@ -261,13 +291,50 @@ export function trackEffects(dep) {
   }
 }
 
-export function trigger(target, key) {
+export function trigger(target, type, key, newVal) {
   const depsMap = targetMap.get(target);
   if (!depsMap) {
     return;
   }
-  const dep = depsMap.get(key);
-  triggerEffects(dep);
+
+  const deps = [];
+  if (key === 'length' && isArray(target)) {
+    for (const [key, dep] of depsMap.entries()) {
+      if (key === 'length' || key >= newVal) {
+        deps.push(dep);
+      }
+    }
+  } else {
+    if (key !== void 0) {
+      deps.push(depsMap.get(key));
+    }
+    switch (type) {
+      case TriggerTypes.ADD:
+        if (!isArray(target)) {
+          deps.push(depsMap.get(ITERATE_KEY));
+        } else if (isIntegerKey(key)) {
+          deps.push(depsMap.get('length'));
+        }
+        break;
+      case TriggerTypes.DELETE:
+        if (!isArray(target)) {
+          deps.push(depsMap.get(ITERATE_KEY));
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (deps.length === 1) {
+    deps[0] && triggerEffects(deps[0]);
+  } else {
+    const effects = [];
+    for (const dep of deps) {
+      dep && effects.push(...dep);
+    }
+    triggerEffects(createDep(effects));
+  }
 }
 
 export function triggerEffects(dep) {
@@ -285,7 +352,7 @@ export function triggerEffects(dep) {
 }
 
 function triggerEffect(effect) {
-  if (activeEffect !== effect) {
+  if (activeEffect !== effect || effect.allowRecurse) {
     if (effect.scheduler) {
       effect.scheduler();
     } else if (effect.run) {

@@ -34,6 +34,8 @@ export const hasChanged = (value, oldValue) => !Object.is(value, oldValue);
 export const hasOwn = (val, key) =>
   Object.prototype.hasOwnProperty.call(val, key);
 
+export const isIntegerKey = (key) => /^\d+$/.test(key);
+
 export const NOOP = () => {};
 
 export const EMPTY_OBJ = {};
