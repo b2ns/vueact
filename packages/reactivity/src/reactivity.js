@@ -511,6 +511,10 @@ export function watchEffect(effect, opts) {
   doWatch(effect, null, opts);
 }
 
+export function watchPostEffect(effect) {
+  doWatch(effect, null, { flush: 'post' });
+}
+
 const INITIAL_WATCHER_VALUE = {};
 function doWatch(source, cb, { immediate, flush, deep } = {}) {
   let getter;
