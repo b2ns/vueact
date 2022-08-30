@@ -1,9 +1,10 @@
+import { provide, ref } from 'vueact';
 import Hello from '../components/Hello';
-import { ref } from 'vueact';
 import './About.css';
 
 export default () => {
   const name = ref('');
+  provide('hello-name', name);
 
   return () => (
     <div class="about-page">

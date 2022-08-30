@@ -1,4 +1,5 @@
 export { createAppAPI } from './src/apiCreateApp.js';
+export { inject, provide } from './src/apiInject.js';
 export {
   onBeforeMount,
   onBeforeUnmount,
