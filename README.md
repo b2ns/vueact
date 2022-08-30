@@ -14,12 +14,13 @@ just for fun 🕹️
 ## features ✨
 
 - Vue
+
   - [x] reactivity
   - [x] composition api
   - [x] lifecycle hooks
   - [ ] class and style normalize
   - [x] custom renderer
-  - [ ] provide, inject
+  - [x] provide, inject
   - [ ] inherit attrs
   - [ ] Fragment
   - [ ] quick diff algorithem when children with keys
@@ -29,11 +30,14 @@ just for fun 🕹️
   - [ ] KeepAlive
   - [ ] Teleport (i.e., Portal in React)
   - [ ] defineProps
+
 - React
+
   - [x] JSX
   - [x] stateful functional component
   - [x] props.children (i.e., slots in Vue)
   - [x] render props
+
 - other lib and tools
 
   - JSX parser (extend the React JSX)
@@ -46,8 +50,9 @@ just for fun 🕹️
     - [x] assets loader
     - [x] html plugin
     - [x] inject renderFactory plugin
-  - router
-  - state managing
+
+- router
+- state managing
 
 ## usage
 
