@@ -5,7 +5,7 @@ import { isDef, parseArgs } from '../src/utils.js';
 
 const Args = parseArgs(process.argv.slice(2));
 
-let config = {};
+let config = null;
 
 if (Args.config) {
   config = (await import(Args.config)).default;
@@ -13,15 +13,21 @@ if (Args.config) {
 } else {
   let dir = process.cwd();
   while (dir && dir !== '/') {
-    const configFile = join(dir, 'pack.config.js');
-    if (existsSync(configFile)) {
-      config = (await import(configFile)).default;
+    for (const ext of ['js', 'mjs', 'cjs']) {
+      const configFile = join(dir, `pack.config.${ext}`);
+      if (existsSync(configFile)) {
+        config = (await import(configFile)).default;
+        break;
+      }
+    }
+    if (config) {
       break;
     }
     dir = dirname(dir);
   }
 }
 
+config = config || {};
 for (const key in Args) {
   const val = Args[key];
   if (isDef(val)) {
