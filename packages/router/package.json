@@ -12,5 +12,11 @@
   "license": "MIT",
   "dependencies": {
     "@vueact/shared": "workspace:^1.0.0"
+  },
+  "devDependencies": {
+    "vueact": "workspace:^1.0.0"
+  },
+  "peerDependencies": {
+    "vueact": "workspace:^1.0.0"
   }
 }

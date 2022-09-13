@@ -42,6 +42,15 @@ importers:
     dependencies:
       '@vueact/shared': link:../shared
 
+  packages/router:
+    specifiers:
+      '@vueact/shared': workspace:^1.0.0
+      vueact: workspace:^1.0.0
+    dependencies:
+      '@vueact/shared': link:../shared
+    devDependencies:
+      vueact: link:../vueact
+
   packages/runtime-core:
     specifiers:
       '@vueact/reactivity': workspace:^1.0.0
